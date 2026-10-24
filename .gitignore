@@ -1,4 +1,11 @@
 *.user
 /.vs
 /Debug
-/Keys.cpp
+/MacPlayer Preferences
+
+# Build output (holds "MacPlayer Log" in logging builds)
+build/
+
+# macOS, Python
+.DS_Store
+__pycache__/
