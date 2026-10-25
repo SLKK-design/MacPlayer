@@ -625,6 +625,22 @@ void HandlePlayerContent(EventRecord *eventPtr, short item)
 								_currentTrack.uri = "";
 								_trackStartedAt = TickCount();
 								PollSoon(1500);
+							},
+							[](int statusCode, const string& body)
+							{
+								// 403 "Restriction violated": nothing before it, e.g.
+								// the first track of a playlist. Restart it, as
+								// Spotify's apps do (Seek shows its own errors).
+								if (statusCode != 403)
+								{
+									_spotifyClient.HandleError(
+										SpotifyClient::ErrorText("Previous", statusCode, body));
+									return;
+								}
+								if (_viewNowPlaying)
+									DrawTrackImage();  // the cover TrackChanging covered
+								_spotifyClient.Seek(0,
+									[](JsonValue& root) { _trackStartedAt = TickCount(); });
 							});
 					}
 				}

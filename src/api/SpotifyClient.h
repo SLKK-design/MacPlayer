@@ -37,7 +37,7 @@ class SpotifyClient
 		void PlayTracks(const vector<string>& trackUris, const string& trackUri,
 		                function<void(JsonValue&)> onComplete);
 		void NextTrack(function<void(JsonValue&)> onComplete);
-		void PreviousTrack(function<void(JsonValue&)> onComplete);
+		void PreviousTrack(function<void(JsonValue&)> onComplete, SpotifyErrorHandler onError = nullptr);
 		void GetDevices(function<void(JsonValue&)> onComplete);
 		void GetCurrentUser(function<void(JsonValue&)> onComplete);
 		static const int PageSize = 25;  // playlists or tracks per request

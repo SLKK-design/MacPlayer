@@ -130,13 +130,14 @@ void SpotifyClient::NextTrack(function<void(JsonValue&)> onComplete)
 		onComplete);
 }
 
-void SpotifyClient::PreviousTrack(function<void(JsonValue&)> onComplete)
+void SpotifyClient::PreviousTrack(function<void(JsonValue&)> onComplete, SpotifyErrorHandler onError)
 {
 	Post(
 		PlayerUrl("previous"),
 		false,
 		"",
-		onComplete);
+		onComplete,
+		onError);
 }
 
 void SpotifyClient::GetDevices(function<void(JsonValue&)> onComplete)
