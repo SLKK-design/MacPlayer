@@ -664,19 +664,38 @@ void LoadPendingImage()
 
 void DrawPlaceholderImage()
 {
-	// Square, centred in the cover's place, which full screen makes wider
-	Rect r = _trackImageRect;
-	short w = r.right - r.left, h = r.bottom - r.top;
-	short side = w < h ? w : h;
-	if (w != h)
-		EraseRect(&_trackImageRect);
-	r.left += (w - side) / 2;
-	r.top += (h - side) / 2;
-	r.right = r.left + side;
-	r.bottom = r.top + side;
+	MacSetPort(_dialog);  // an error dialog just before leaves no port set
 
+	Rect r = _trackImageRect;
 	PicHandle pic = GetPicture(kPlaceholderImage);
-	DrawPicture(pic, &r);
+	if (pic == nil)
+	{
+		EraseRect(&r);  // at least no old cover
+		return;
+	}
+
+	// At its own size, centred in the cover's place, which full screen makes
+	// bigger: scaled up, its dither pattern turns into moiré. Shrunk only to
+	// fit a smaller place.
+	Rect frame = (**pic).picFrame;
+	short w = r.right - r.left, h = r.bottom - r.top;
+	short pw = frame.right - frame.left, ph = frame.bottom - frame.top;
+	if (pw > w)
+	{
+		ph = ph * w / pw;
+		pw = w;
+	}
+	if (ph > h)
+	{
+		pw = pw * h / ph;
+		ph = h;
+	}
+	if (pw != w || ph != h)
+		EraseRect(&r);
+	short left = r.left + (w - pw) / 2, top = r.top + (h - ph) / 2;
+	MacSetRect(&frame, left, top, left + pw, top + ph);
+
+	DrawPicture(pic, &frame);
 }
 
 void TrackChanging()
