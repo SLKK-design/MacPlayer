@@ -69,29 +69,24 @@ static bool HaveDevice()
 // plays; RefreshPlayerState doesn't follow it back.
 static unsigned long _deviceChosenAt = 0;
 
-// When shuffle or repeat was last changed here (TickCount). For a moment
+// When shuffle and repeat were last changed here (TickCount). For a moment
 // after that Spotify can still report the old state; RefreshPlayerState
 // doesn't take it.
-static unsigned long _playModeChosenAt = 0;
+static unsigned long _shuffleChosenAt = 0;
+static unsigned long _repeatChosenAt = 0;
+
+// When MacPlayer last started a track from its beginning (TickCount): a
+// double-click, Next, Previous or Back's restart. Spotify can still report
+// the old position for a moment, so for mRestartTrackMs Back goes by this.
+static unsigned long _trackStartedAt = 0;
 
 // The like button: the track it is for ("" while hidden), whether that is
-// in Liked Songs, and whether Spotify is still to be asked (CheckLiked)
+// in Liked Songs, whether Spotify has confirmed it, and whether to ask on
+// the next idle pass (CheckLiked)
 static string _likeUri;
 static bool _liked = false;
-static bool _likeUnknown = false;
-
-// A Liked Songs request failed. A 403 most likely means a login from before
-// MacPlayer used Liked Songs, which lacks the permission for it.
-static void LibraryError(const string& what, int statusCode, const string& body)
-{
-	string message = what + " failed: HTTP " + to_string(statusCode) + "\r" +
-	                 SpotifyClient::ErrorMessage(body);
-	if (statusCode == 403)
-		message += "\r\rA login from before this version of MacPlayer lacks the "
-		           "permission for Liked Songs: run tools/spotify_auth.py again and "
-		           "copy the new MacPlayer Preferences into System Folder:Preferences.";
-	_spotifyClient.HandleError(message);
-}
+static bool _likeKnown = false;
+static bool _likeCheckDue = false;
 
 int main()
 {
@@ -229,7 +224,7 @@ void EventLoop()
 			// Idle: everything else has been drawn by now, so this is when
 			// the like button's state is asked and a waiting album cover
 			// loads; polling resumes after them
-			if (_likeUnknown)
+			if (_likeCheckDue)
 				CheckLiked();
 			else if (!_pendingImage.empty())
 				LoadPendingImage();
@@ -537,9 +532,8 @@ void HandlePlayerContent(EventRecord *eventPtr, short item)
 					}
 					RefreshPlayerState();
 					if (_playerState.isPlaying != wantPlaying)
-						_spotifyClient.HandleError(
-							string(wantPlaying ? "Play" : "Pause") + " failed: HTTP " +
-							to_string(statusCode) + "\r" + SpotifyClient::ErrorMessage(body));
+						_spotifyClient.HandleError(SpotifyClient::ErrorText(
+							wantPlaying ? "Play" : "Pause", statusCode, body));
 				};
 
 				if (wantPlaying)
@@ -568,12 +562,16 @@ void HandlePlayerContent(EventRecord *eventPtr, short item)
 				// only just begun. Read where it is first: since the last poll
 				// it may have been paused or changed elsewhere, which this also
 				// shows. If that fails, its error has been shown: stop there.
+				// Just after MacPlayer started it (e.g. a second quick Back)
+				// Spotify may still report the old position: go by that start.
+				bool nearStart = TickCount() - _trackStartedAt < mRestartTrackMs * 60 / 1000;
 				WaitCursor();
-				if (RefreshPlayerState())
+				if (nearStart || RefreshPlayerState())
 				{
-					if (_playerState.progressMs > mRestartTrackMs)
+					if (!nearStart && _playerState.progressMs > mRestartTrackMs)
 					{
-						_spotifyClient.Seek(0, [](JsonValue& root) {});
+						_spotifyClient.Seek(0,
+							[](JsonValue& root) { _trackStartedAt = TickCount(); });
 					}
 					else
 					{
@@ -585,6 +583,7 @@ void HandlePlayerContent(EventRecord *eventPtr, short item)
 								// track: poll again shortly. Clearing the uri makes
 								// that poll redraw whatever it finds.
 								_currentTrack.uri = "";
+								_trackStartedAt = TickCount();
 								PollSoon(1500);
 							});
 					}
@@ -610,6 +609,7 @@ void HandlePlayerContent(EventRecord *eventPtr, short item)
 						// poll again shortly. Clearing the uri makes that poll
 						// redraw whatever it finds.
 						_currentTrack.uri = "";
+						_trackStartedAt = TickCount();
 						PollSoon(1500);
 					});
 			}
@@ -634,7 +634,7 @@ void HandlePlayerContent(EventRecord *eventPtr, short item)
 						[shuffle](JsonValue& root)
 						{
 							_playerState.shuffle = shuffle;
-							_playModeChosenAt = TickCount();
+							_shuffleChosenAt = TickCount();
 							UpdateShuffleIcon();
 						});
 				}
@@ -660,7 +660,7 @@ void HandlePlayerContent(EventRecord *eventPtr, short item)
 						[repeat](JsonValue& root)
 						{
 							_playerState.repeat = repeat;
-							_playModeChosenAt = TickCount();
+							_repeatChosenAt = TickCount();
 							UpdateRepeatIcon();
 						});
 				}
@@ -675,24 +675,31 @@ void HandlePlayerContent(EventRecord *eventPtr, short item)
 
 		case kPlayerLike:
 		{
-			// Add the track to Liked Songs, or take it out again
+			// Add the track to Liked Songs, or take it out again. Switch what
+			// Spotify has: ask first while that isn't confirmed (not asked
+			// yet, or the check failed)
+			WaitCursor();
+			if (!_likeKnown)
+				CheckLiked();
+
 			bool like = !_liked;
 			auto onDone = [like](JsonValue& root)
 			{
 				_liked = like;
-				_likeUnknown = false;
+				_likeKnown = true;
 				UpdateLikeIcon();
 			};
 			auto onError = [like](int statusCode, const string& body)
 			{
-				LibraryError(like ? "Adding to Liked Songs" : "Removing from Liked Songs",
-				             statusCode, body);
+				_spotifyClient.HandleError(SpotifyClient::ErrorText(
+					like ? "Adding to Liked Songs" : "Removing from Liked Songs", statusCode, body));
 			};
 
 			if (like)
 				_spotifyClient.SaveToLibrary(_likeUri, onDone, onError);
 			else
 				_spotifyClient.RemoveFromLibrary(_likeUri, onDone, onError);
+			InitCursor();
 			break;
 		}
 
@@ -722,6 +729,7 @@ void PlayTrack()
 	// The play button and now-playing change once Spotify plays the track
 	auto onPlaying = [=](JsonValue& root)
 	{
+		_trackStartedAt = TickCount();
 		_playerState.isPlaying = true;
 		TogglePlayButtonIcon();
 		DrawTrackName();
@@ -802,7 +810,7 @@ void LoadPendingImage()
 
 void DrawPlaceholderImage()
 {
-	MacSetPort(_dialog);  // an error dialog just before leaves no port set
+	MacSetPort(_dialog);  // also drawn from network callbacks, as DrawTrackImage
 
 	Rect r = _trackImageRect;
 	PicHandle pic = GetPicture(kPlaceholderImage);
@@ -941,7 +949,7 @@ void GetLikedSongs()
 		},
 		[](int statusCode, const string& body)
 		{
-			LibraryError("Liked Songs", statusCode, body);
+			_spotifyClient.HandleError(SpotifyClient::ErrorText("Liked Songs", statusCode, body));
 		});
 }
 
@@ -1217,7 +1225,8 @@ void InitPlayer(DialogPtr dialog)
 	_playerState.repeat = 0;       // off
 	_playerState.progressMs = 0;
 	_likeUri.clear();  // ModePlayer hides the button
-	_likeUnknown = false;
+	_likeKnown = false;
+	_likeCheckDue = false;
 	_pendingImage.clear();
 	_imageAlbumId.clear();
 
@@ -1440,6 +1449,7 @@ bool RefreshPlayerState()
 		[=, &answered](JsonValue& root)
 		{
 			answered = true;
+			Microseconds(&_lastPollTime);  // counts as a poll: restart the poll timer
 			bool isPlaying = root("is_playing").getTag() == JSON_TRUE;
 
 			if (isPlaying != _playerState.isPlaying)
@@ -1449,26 +1459,25 @@ bool RefreshPlayerState()
 			}
 
 			// Shuffle and repeat, also when changed in another Spotify app,
-			// but not just after a change here (see _playModeChosenAt).
+			// but not just after a change here (see _shuffleChosenAt).
 			// Absent when nothing plays (204): keep what is shown.
-			if (TickCount() - _playModeChosenAt > 600)
+			JsonValue shuffle = root("shuffle_state");
+			bool shuffleOn = shuffle.getTag() == JSON_TRUE;
+			if (shuffle.isBoolean() && shuffleOn != _playerState.shuffle &&
+			    TickCount() - _shuffleChosenAt > 600)
 			{
-				JsonValue shuffle = root("shuffle_state");
-				bool shuffleOn = shuffle.getTag() == JSON_TRUE;
-				if (shuffle.isBoolean() && shuffleOn != _playerState.shuffle)
-				{
-					_playerState.shuffle = shuffleOn;
-					UpdateShuffleIcon();
-				}
+				_playerState.shuffle = shuffleOn;
+				UpdateShuffleIcon();
+			}
 
-				string repeat = JsonStr(root("repeat_state"));
-				for (short mode = 0; mode < kRepeatModeCount; mode++)
+			string repeat = JsonStr(root("repeat_state"));
+			for (short mode = 0; mode < kRepeatModeCount; mode++)
+			{
+				if (repeat == kRepeatModes[mode].state && mode != _playerState.repeat &&
+				    TickCount() - _repeatChosenAt > 600)
 				{
-					if (repeat == kRepeatModes[mode].state && mode != _playerState.repeat)
-					{
-						_playerState.repeat = mode;
-						UpdateRepeatIcon();
-					}
+					_playerState.repeat = mode;
+					UpdateRepeatIcon();
 				}
 			}
 
@@ -1561,6 +1570,10 @@ bool RefreshPlayerState()
 // and once replaced nothing else refers to it.
 static void SetItemIcon(short item, short iconId)
 {
+	// Only DITL 129 has these icon items; other screens' items aren't cicns
+	if (_uiState != Player)
+		return;
+
 	CIconHandle icon = GetCIcon(iconId);
 	if (icon == nil)
 		return;  // out of memory: keep the one shown
@@ -1604,8 +1617,9 @@ void UpdateLikeButton()
 
 	_likeUri = _currentTrack.uri;
 	_liked = false;
-	_likeUnknown = !_likeUri.empty() && _likeUri.compare(0, 14, "spotify:local:") != 0;
-	if (_likeUnknown)
+	_likeKnown = false;
+	_likeCheckDue = !_likeUri.empty() && _likeUri.compare(0, 14, "spotify:local:") != 0;
+	if (_likeCheckDue)
 	{
 		ShowDialogItem(_dialog, kPlayerLike);
 		UpdateLikeIcon();
@@ -1622,18 +1636,22 @@ void UpdateLikeIcon()
 	SetItemIcon(kPlayerLike, _liked ? kPlayerLikedIcon : kPlayerLikeIcon);
 }
 
-// Idle-time half of UpdateLikeButton: is the track in Liked Songs? If Spotify
-// won't say (e.g. a login without the permission) the button stays +; a
-// click then shows why.
+// Is the track in Liked Songs? Asked on an idle pass after UpdateLikeButton,
+// and by a click while that hasn't answered. If Spotify won't say (e.g. a
+// login without the permission) only the log tells; a click shows why.
 void CheckLiked()
 {
-	_likeUnknown = false;
+	_likeCheckDue = false;
 	_spotifyClient.IsInLibrary(_likeUri,
 		[](JsonValue& root)
 		{
-			if (root.getTag() == JSON_ARRAY && root[0].getTag() == JSON_TRUE)
+			if (root.getTag() != JSON_ARRAY)
+				return;
+			_likeKnown = true;
+			bool liked = root[0].getTag() == JSON_TRUE;
+			if (liked != _liked)
 			{
-				_liked = true;
+				_liked = liked;
 				UpdateLikeIcon();
 			}
 		},

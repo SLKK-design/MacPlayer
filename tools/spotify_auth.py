@@ -44,7 +44,8 @@ import webbrowser
 AUTHORIZE_URL = "https://accounts.spotify.com/authorize"
 TOKEN_URL = "https://accounts.spotify.com/api/token"
 
-# Must match SpotifyClient::_permissions in src/api/SpotifyClient.h
+# Everything MacPlayer may do; the app keeps no list of its own. After adding
+# one, older logins get 403 "Insufficient client scope" until this runs again.
 SCOPES = " ".join([
     "user-read-playback-state",
     "user-modify-playback-state",

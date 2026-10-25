@@ -61,6 +61,7 @@ class SpotifyClient
 		void SetRepeat(const string& state, function<void(JsonValue&)> onComplete);
 		void HandleError(const string& errorMsg);
 		static string ErrorMessage(const string& body);
+		static string ErrorText(const string& what, int statusCode, const string& body);
 		void InitCache();
 
 	private:
@@ -77,15 +78,6 @@ class SpotifyClient
 				bool Debug;
 				bool ExpectJson;  // GETs; commands' bodies are never parsed
 		};
-
-		const string _permissions =
-			"user-read-playback-state "
-			"user-modify-playback-state "
-			"user-read-recently-played "
-			"user-library-read "
-			"user-library-modify "
-			"playlist-read-private "
-			"playlist-read-collaborative";
 
 		HttpClient* _httpClient;
 		Prefs* _prefs;

@@ -33,6 +33,12 @@ string SpotifyClient::ErrorMessage(const string& body)
 			if (reason.getTag() == JSON_STRING && string(reason.toString()) == "NO_ACTIVE_DEVICE")
 				message += "\r\rStart Spotify on the device you play on, then choose it in "
 				           "the Device menu (Refresh... if it isn't listed).";
+			// The login is older than a permission (scope) MacPlayer now uses
+			if (message.find("Insufficient client scope") != string::npos)
+				message += "\r\rMacPlayer needs a new login for this. Quit MacPlayer, run "
+				           "tools/spotify_auth.py again, copy the new MacPlayer Preferences "
+				           "into System Folder:Preferences, then open MacPlayer. (Copied in "
+				           "while MacPlayer runs, it would be overwritten with the old login.)";
 			return message;
 		}
 	}
@@ -44,11 +50,12 @@ string SpotifyClient::ErrorMessage(const string& body)
 	return text;
 }
 
-static string HttpErrorText(const string& uri, int statusCode, const string& body)
+// "<what> failed: HTTP <status>" and Spotify's reason, for the error dialog
+string SpotifyClient::ErrorText(const string& what, int statusCode, const string& body)
 {
-	string text = uri + ": HTTP " + to_string(statusCode) + " response.";
+	string text = what + " failed: HTTP " + to_string(statusCode);
 	if (!body.empty())
-		text += "\r" + SpotifyClient::ErrorMessage(body);
+		text += "\r" + ErrorMessage(body);
 	return text;
 }
 
@@ -364,10 +371,11 @@ void SpotifyClient::GetImage(const string& image, const string& albumId, functio
 	});
 }
 
+// market leaves out the track's long available_markets list
 void SpotifyClient::GetPlayerState(function<void(JsonValue&)> onComplete)
 {
 	Get(
-		"https://api.spotify.com/v1/me/player",
+		"https://api.spotify.com/v1/me/player?market=from_token",
 		false,
 		onComplete);
 }
@@ -582,7 +590,7 @@ void SpotifyClient::HandleHttpResponse(HttpResponse& response, int requestId)
 			if (request.OnError)
 				request.OnError(response.StatusCode, response.Content);
 			else
-				HandleError(HttpErrorText(request.Uri, response.StatusCode, response.Content));
+				HandleError(ErrorText(request.Uri, response.StatusCode, response.Content));
 		}
 		else if (request.OnError)
 		{
@@ -590,7 +598,7 @@ void SpotifyClient::HandleHttpResponse(HttpResponse& response, int requestId)
 		}
 		else
 		{
-			HandleError(HttpErrorText(request.Uri, response.StatusCode, response.Content));
+			HandleError(ErrorText(request.Uri, response.StatusCode, response.Content));
 		}
 	}
 	else
@@ -766,6 +774,11 @@ void SpotifyClient::HandleError(const string& errorMsg)
 	/* Build display text: clipboard notice + message */
 	string display = "(Full text copied to clipboard - Cmd-V to paste)\r\r" + errorMsg;
 
+	// The dialog becomes the current port; put back the one in use, or
+	// the next drawing goes to the disposed dialog
+	GrafPtr savedPort;
+	GetPort(&savedPort);
+
 	DialogPtr dlg = GetNewDialog(135, nil, (WindowPtr)-1);
 	if (dlg) {
 		DrawDialog(dlg);
@@ -797,6 +810,7 @@ void SpotifyClient::HandleError(const string& errorMsg)
 		StopAlert(131, nil);
 	}
 
+	MacSetPort(savedPort);
 	InitCursor();
 }
 
