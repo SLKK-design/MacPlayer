@@ -77,14 +77,6 @@ SpotifyClient::SpotifyClient(HttpClient* httpClient, Prefs* prefs)
 	_httpClient->SetSecondSessionHost("i.scdn.co");
 }
 
-void SpotifyClient::GetRecentTracks(function<void(JsonValue&)> onComplete)
-{
-	Get(
-		"https://api.spotify.com/v1/me/player/recently-played?limit=10", 
-		false,
-		onComplete);
-}
-
 /* A player command's URL. Naming MacPlayer's device makes the command reach
  * it even when Spotify doesn't count it as active, e.g. on a fresh start
  * before anything has played on it. */

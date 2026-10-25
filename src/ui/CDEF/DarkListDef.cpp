@@ -109,12 +109,12 @@ extern "C"
 			offset += cellWidth;
 		}
 
-		// Restore graphics environment
-		MacSetPort(savedPort);
+		// Restore graphics environment: the list port's first, then the port
 		SetClip(savedClip);
 		DisposeRgn(savedClip);
-		SetPenState(&savedPenState); 
+		SetPenState(&savedPenState);
 		TextMode(srcCopy);
+		MacSetPort(savedPort);
 	}
 
 	pascal void Dispose(ListHandle list)

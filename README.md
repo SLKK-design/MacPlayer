@@ -14,7 +14,7 @@ This version brings it back by doing all of that on the Mac. It uses the HTTPS e
 
 MacPlayer is a remote. The music plays on another Spotify device, such as your phone, a computer or a speaker, and you pick it from the Device menu.
 
-- Your Liked Songs, playlists and recently played tracks
+- Your Liked Songs and playlists
 - The round + next to the track name adds it to Liked Songs, as in Spotify
 - Play, pause, next, previous and volume
 - The album cover, dithered for a black-and-white screen
@@ -72,7 +72,7 @@ MacPlayer keeps three things in System Folder:Preferences:
 
 ## A word on security
 
-The connection is encrypted. The Mac is not protected. Classic Mac OS has no memory protection and no file permissions, so anything running on the Mac can read the preferences file. MacPlayer only asks Spotify for what a remote needs: reading and controlling playback, recently played tracks, reading and changing your Liked Songs, and your playlists. Use your own Spotify app, and you can remove MacPlayer's access from your Spotify account at any time.
+The connection is encrypted. The Mac is not protected. Classic Mac OS has no memory protection and no file permissions, so anything running on the Mac can read the preferences file. MacPlayer only asks Spotify for what a remote needs: reading and controlling playback, reading and changing your Liked Songs, and your playlists. Use your own Spotify app, and you can remove MacPlayer's access from your Spotify account at any time.
 
 ## Building
 

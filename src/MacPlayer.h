@@ -11,7 +11,8 @@
 const double mPollFrequencyMs = 30000;
 const int mRestartTrackMs = 3000;  // later into a track, back restarts it
 const int mBrowseTimeoutMs = 60000;  // a track list unused this long gives way to now-playing
-const int mFirstPlaylists = 15;  // playlist rows (with Liked Songs) before the list first shows
+const int mMaxPages = 3;       // requests one load of a list makes at most
+const int mMaxListRows = 300;  // a page more still fits the List Manager's 32 KB
 
 enum UIState
 {
@@ -139,7 +140,6 @@ void HandleMenuChoice(long menuChoice);
 void ShowAboutBox();
 void WaitCursor();
 void HandlePlayerContent(EventRecord *eventPtr, short item);
-void GetRecentTracks();
 void GetPlaylists(DialogPtr dialog);
 void GetPlaylistTracks(const string& uri, const string& playlistId);
 void GetLikedSongs();

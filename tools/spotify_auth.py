@@ -49,7 +49,6 @@ TOKEN_URL = "https://accounts.spotify.com/api/token"
 SCOPES = " ".join([
     "user-read-playback-state",
     "user-modify-playback-state",
-    "user-read-recently-played",
     "user-library-read",
     "user-library-modify",
     "playlist-read-private",

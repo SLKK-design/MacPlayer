@@ -85,24 +85,52 @@ static unsigned long _trackStartedAt = 0;
 // gone unused for mBrowseTimeoutMs; its close button does at once.
 static unsigned long _listUsedAt = 0;
 
-// Lists load a page at a time (SpotifyClient::PageSize). The open track
-// list's source (a playlist id, "" for Liked Songs), how many entries of it
-// and of the playlists Spotify has given, and whether it has more.
-static string _pageSourceId;
+// Lists load a page at a time (SpotifyClient::PageSize), the open track
+// list's from what _currentContext names (AddTrackPage). How many entries
+// of it and of the playlists Spotify has given, and whether it has more.
 static int _tracksOffset = 0;
 static bool _tracksHaveMore = false;
 static int _playlistsOffset = 0;
 static bool _playlistsHaveMore = false;
 
-// Fill the playlist list down to its bottom edge on the next idle pass
-// once nothing else waits (FillPlaylists): after startup, or when full
-// screen makes the list taller
+// Full screen made the playlist list taller: fill it on the next idle pass
+// once nothing else waits (FillPlaylists)
 static bool _fillPlaylistsDue = false;
 
 // The list's last row is in view, also when its rows don't fill it
 static bool LastRowShown(ListHandle list)
 {
 	return (**list).visible.bottom >= (**list).dataBounds.bottom;
+}
+
+// The click at pt was on the list's scroll bar or below its last row
+static bool ClickBesideRows(ListHandle list, Point pt)
+{
+	ListPtr l = *list;
+	if (!MacPtInRect(pt, &l->rView))
+		return true;
+	return l->visible.top + (pt.v - l->rView.top) / l->cellSize.v >= l->dataBounds.bottom;
+}
+
+// Load pages while more() holds: fetch(offset) requests the one at offset,
+// and adding it moves offset on. Stops after a failure (its error has been
+// shown), an empty page or mMaxPages requests.
+static void LoadPages(int& offset, function<bool()> more, function<void(int)> fetch)
+{
+	bool waiting = false;
+	for (int page = 0; page < mMaxPages && more(); page++)
+	{
+		if (!waiting)
+			WaitCursor();
+		waiting = true;
+
+		int before = offset;
+		fetch(before);
+		if (offset == before)
+			break;
+	}
+	if (waiting)
+		InitCursor();
 }
 
 // The like button: the track it is for ("" while hidden), whether that is
@@ -112,6 +140,45 @@ static string _likeUri;
 static bool _liked = false;
 static bool _likeKnown = false;
 static bool _likeCheckDue = false;
+
+// Next or Previous went through. Asked at once, Spotify can still report
+// the old track: poll again shortly. Clearing the uri makes that poll
+// redraw whatever it finds.
+static void TrackSkipped(JsonValue& root)
+{
+	_currentTrack.uri = "";
+	_trackStartedAt = TickCount();
+	PollSoon(1500);
+}
+
+// Back to the start of the playing track (Seek shows its own errors)
+static void RestartTrack()
+{
+	_spotifyClient.Seek(0, [](JsonValue& root) { _trackStartedAt = TickCount(); });
+}
+
+// Shuffle and repeat switch what Spotify has now, which may have changed
+// elsewhere since the last poll: read it, then make the change
+static void ChangePlayMode(function<void()> change)
+{
+	if (!HaveDevice())
+	{
+		NoDevicesError();
+		return;
+	}
+	WaitCursor();
+	if (RefreshPlayerState())
+		change();
+	InitCursor();
+}
+
+// Draw the playlist list anew after its rows changed with drawing off
+static void RedrawNavList()
+{
+	MacSetPort(_dialog);
+	EraseRect(&(**_navList).rView);
+	LUpdate(_dialog->visRgn, _navList);
+}
 
 int main()
 {
@@ -248,14 +315,17 @@ void EventLoop()
 		{
 			// Idle: everything else has been drawn by now, so this is when
 			// a waiting album cover loads, then the like button's state is
-			// asked, then (unless a poll is due) more playlists fill the
-			// list; polling resumes after them
+			// asked, then (unless a poll is due) more playlists fill a list
+			// full screen made taller; polling resumes after them
 			if (!_pendingImage.empty())
 				LoadPendingImage();
 			else if (_likeCheckDue)
 				CheckLiked();
 			else if (_fillPlaylistsDue && !PollDue())
+			{
 				FillPlaylists();
+				RedrawNavList();
+			}
 			else
 				PollPlayerState();
 		}
@@ -540,9 +610,11 @@ void HandlePlayerContent(EventRecord *eventPtr, short item)
 					NoDevicesError();
 				}
 			}
-			else
+			else if (ClickBesideRows(_trackList, pt))
 			{
-				LoadMoreTracks();  // scrolled to the end
+				// Scrolled to the end, or a click below the last row. Not on
+				// a row: a load there would also swallow a double-click.
+				LoadMoreTracks();
 			}
 
 			break;
@@ -610,37 +682,27 @@ void HandlePlayerContent(EventRecord *eventPtr, short item)
 				{
 					if (!nearStart && _playerState.progressMs > mRestartTrackMs)
 					{
-						_spotifyClient.Seek(0,
-							[](JsonValue& root) { _trackStartedAt = TickCount(); });
+						RestartTrack();
 					}
 					else
 					{
 						TrackChanging();
-						_spotifyClient.PreviousTrack(
-							[=](JsonValue& root)
-							{
-								// Asked at once, Spotify can still report the old
-								// track: poll again shortly. Clearing the uri makes
-								// that poll redraw whatever it finds.
-								_currentTrack.uri = "";
-								_trackStartedAt = TickCount();
-								PollSoon(1500);
-							},
+						_spotifyClient.PreviousTrack(TrackSkipped,
 							[](int statusCode, const string& body)
 							{
-								// 403 "Restriction violated": nothing before it, e.g.
-								// the first track of a playlist. Restart it, as
-								// Spotify's apps do (Seek shows its own errors).
-								if (statusCode != 403)
-								{
-									_spotifyClient.HandleError(
-										SpotifyClient::ErrorText("Previous", statusCode, body));
-									return;
-								}
+								// Still the same track
 								if (_viewNowPlaying)
 									DrawTrackImage();  // the cover TrackChanging covered
-								_spotifyClient.Seek(0,
-									[](JsonValue& root) { _trackStartedAt = TickCount(); });
+
+								// "Restriction violated": nothing before it, e.g.
+								// the first track of a playlist. Restart it, as
+								// Spotify's apps do.
+								if (statusCode == 403 &&
+								    body.find("Restriction violated") != string::npos)
+									RestartTrack();
+								else
+									_spotifyClient.HandleError(
+										SpotifyClient::ErrorText("Previous", statusCode, body));
 							});
 					}
 				}
@@ -658,16 +720,7 @@ void HandlePlayerContent(EventRecord *eventPtr, short item)
 			if (HaveDevice())
 			{
 				TrackChanging();
-				_spotifyClient.NextTrack(
-					[=](JsonValue& root)
-					{
-						// Asked at once, Spotify can still report the old track:
-						// poll again shortly. Clearing the uri makes that poll
-						// redraw whatever it finds.
-						_currentTrack.uri = "";
-						_trackStartedAt = TickCount();
-						PollSoon(1500);
-					});
+				_spotifyClient.NextTrack(TrackSkipped);
 			}
 			else
 			{
@@ -677,57 +730,33 @@ void HandlePlayerContent(EventRecord *eventPtr, short item)
 		}
 
 		case kPlayerShuffle:
-		{
-			if (HaveDevice())
+			ChangePlayMode([]
 			{
-				// Switch what Spotify has now: it may have been changed
-				// elsewhere since the last poll
-				WaitCursor();
-				if (RefreshPlayerState())
-				{
-					bool shuffle = !_playerState.shuffle;
-					_spotifyClient.SetShuffle(shuffle,
-						[shuffle](JsonValue& root)
-						{
-							_playerState.shuffle = shuffle;
-							_shuffleChosenAt = TickCount();
-							UpdateShuffleIcon();
-						});
-				}
-				InitCursor();
-			}
-			else
-			{
-				NoDevicesError();
-			}
+				bool shuffle = !_playerState.shuffle;
+				_spotifyClient.SetShuffle(shuffle,
+					[shuffle](JsonValue& root)
+					{
+						_playerState.shuffle = shuffle;
+						_shuffleChosenAt = TickCount();
+						UpdateShuffleIcon();
+					});
+			});
 			break;
-		}
 
 		case kPlayerRepeat:
-		{
-			if (HaveDevice())
+			ChangePlayMode([]
 			{
-				// Step on from what Spotify has now, as for shuffle
-				WaitCursor();
-				if (RefreshPlayerState())
-				{
-					short repeat = (_playerState.repeat + 1) % kRepeatModeCount;
-					_spotifyClient.SetRepeat(kRepeatModes[repeat].state,
-						[repeat](JsonValue& root)
-						{
-							_playerState.repeat = repeat;
-							_repeatChosenAt = TickCount();
-							UpdateRepeatIcon();
-						});
-				}
-				InitCursor();
-			}
-			else
-			{
-				NoDevicesError();
-			}
+				// Spotify's order: off, the playlist or album, this track
+				short repeat = (_playerState.repeat + 1) % kRepeatModeCount;
+				_spotifyClient.SetRepeat(kRepeatModes[repeat].state,
+					[repeat](JsonValue& root)
+					{
+						_playerState.repeat = repeat;
+						_repeatChosenAt = TickCount();
+						UpdateRepeatIcon();
+					});
+			});
 			break;
-		}
 
 		case kPlayerCloseList:
 			ViewNowPlaying();
@@ -802,10 +831,16 @@ void PlayTrack()
 
 	if (_currentContext.empty())
 	{
-		// Liked Songs: no context Spotify plays, so hand it the listed tracks
+		// Liked Songs: no context Spotify plays, so hand it the listed
+		// tracks. At most 100, from a few before the chosen one (for Back)
+		size_t chosen = 0;
+		while (chosen < _tracks.size() && _tracks[chosen].uri != _currentTrack.uri)
+			chosen++;
+		size_t first = chosen < _tracks.size() && chosen > 10 ? chosen - 10 : 0;
+
 		vector<string> uris;
-		for (const Track& track : _tracks)
-			uris.push_back(track.uri);
+		for (size_t i = first; i < _tracks.size() && uris.size() < 100; i++)
+			uris.push_back(_tracks[i].uri);
 		_spotifyClient.PlayTracks(uris, _currentTrack.uri, onPlaying);
 	}
 	else
@@ -982,16 +1017,6 @@ void DrawTrackName()
 	DrawString(pArtist);
 }
 
-void GetRecentTracks()
-{
-	_spotifyClient.GetRecentTracks(
-		[=](JsonValue& root)
-		{
-			PopulateTrackList(root, false);
-			_tracksHaveMore = false;  // no further pages for these
-		});
-}
-
 void GetPlaylistTracks(const string& uri, const string& playlistId)
 {
 	bool loaded = false;
@@ -1002,7 +1027,6 @@ void GetPlaylistTracks(const string& uri, const string& playlistId)
 		{
 			loaded = true;
 			_currentContext = uri;
-			_pageSourceId = playlistId;
 			PopulateTrackList(root, false);
 		});
 
@@ -1027,7 +1051,6 @@ void GetLikedSongs()
 		{
 			loaded = true;
 			_currentContext.clear();
-			_pageSourceId.clear();
 			PopulateTrackList(root, false);
 		},
 		LikedSongsError);
@@ -1036,28 +1059,28 @@ void GetLikedSongs()
 		LoadMoreTracks();
 }
 
+// Request the open track list's page at offset and add it: Liked Songs
+// when _currentContext is "", else the playlist it names
+// (spotify:playlist:<id>)
+static void AddTrackPage(int offset)
+{
+	auto onPage = [](JsonValue& root) { PopulateTrackList(root, true); };
+	if (_currentContext.empty())
+		_spotifyClient.GetSavedTracks(offset, onPage, LikedSongsError);
+	else
+		_spotifyClient.GetPlaylistTracks(_currentContext.substr(_currentContext.rfind(':') + 1),
+		                                 offset, onPage);
+}
+
 // The open track list's next pages while its last row is in view: after a
 // scroll to the end, or while the pages so far don't fill the list.
 // Requests run to completion, so loading can't go on during a scroll.
 void LoadMoreTracks()
 {
-	while (_tracksHaveMore && !_viewNowPlaying && LastRowShown(_trackList))
-	{
-		int offset = _tracksOffset;
-		auto onPage = [](JsonValue& root) { PopulateTrackList(root, true); };
-
-		WaitCursor();
-		if (_pageSourceId.empty())
-			_spotifyClient.GetSavedTracks(offset, onPage, LikedSongsError);
-		else
-			_spotifyClient.GetPlaylistTracks(_pageSourceId, offset, onPage);
-		InitCursor();
-
-		// Failed (its error has been shown; the next scroll to the end tries
-		// again) or an empty page
-		if (_tracksOffset == offset)
-			break;
-	}
+	LoadPages(_tracksOffset,
+	          [] { return _tracksHaveMore && !_viewNowPlaying && LastRowShown(_trackList) &&
+	                      (**_trackList).dataBounds.bottom < mMaxListRows; },
+	          AddTrackPage);
 }
 
 // Show a page of tracks: the first replaces the list, a later one
@@ -1080,14 +1103,18 @@ void PopulateTrackList(JsonValue& root, bool append)
 
 		EraseRect(&(**_trackList).rView);
 		EraseRect(&_trackImageRect);
+	}
 
+	LSetDrawingMode(false, _trackList);
+	if (!append)
+	{
+		// The old rows go without being drawn once more
 		_tracks.clear();
 		LDelRow(0, 0, _trackList);
 		_tracksOffset = 0;
 	}
 
 	int rowNum = (**_trackList).dataBounds.bottom;
-	LSetDrawingMode(false, _trackList);
 
 	JsonIterator it = gason::begin(items);
 	while (it.isValid())
@@ -1096,8 +1123,8 @@ void PopulateTrackList(JsonValue& root, bool append)
 		Track trackObj;
 		_tracksOffset++;  // the next page starts after removed entries too
 
-		// Playlist items use "item" since Feb 2026; Liked Songs and
-		// recently-played still "track"
+		// Playlist items use "item" since Feb 2026; Liked Songs still
+		// "track"
 		track = father("item");
 		if (track.getTag() != JSON_OBJECT)
 			track = father("track");
@@ -1122,13 +1149,12 @@ void PopulateTrackList(JsonValue& root, bool append)
 	_tracksHaveMore = root("next").getTag() == JSON_STRING;
 
 	LSetDrawingMode(true, _trackList);
-	InvalRect(&(**_trackList).rView);
 
-	if ((**_trackList).vScroll != NULL)
-		InvalRect(&(**(**_trackList).vScroll).contrlRect);
-
+	// Draw it now: more pages may load before the next update event
 	if (!append)
-		UpdateDialog(_dialog, _dialog->visRgn);
+		UpdateDialog(_dialog, _dialog->visRgn);  // labels and close button just shown
+	MacSetPort(_dialog);
+	LUpdate(_dialog->visRgn, _trackList);
 
 	// Its time on screen counts from now: loading it can take seconds
 	_listUsedAt = TickCount();
@@ -1261,6 +1287,10 @@ void ModePlayer(DialogPtr dialog)
 
 	UpdateDialog(dialog, dialog->visRgn);
 
+	// Playlists down to the list's bottom edge before it is first drawn: a
+	// page holds followed playlists too, which are left out
+	FillPlaylists();
+
 	// Draw the library now rather than on the next update event: the rest of
 	// startup (devices, player state) runs first and would keep it blank
 	LUpdate(dialog->visRgn, _navList);
@@ -1362,10 +1392,8 @@ void InitPlayer(DialogPtr dialog)
 	GetDevices();
 
 	// Play button and now-playing come from the device on the first idle
-	// pass, once the library is on screen; its cover loads after that, and
-	// then further playlists down to the list's bottom edge
+	// pass, once the library is on screen; its cover loads after that
 	PollSoon(0);
-	_fillPlaylistsDue = true;
 }
 
 void GetDevices()
@@ -1532,17 +1560,8 @@ void GetPlaylists(DialogPtr dialog)
 	if (!loaded)
 		return;  // its error has been shown; InitPlayer goes back to login
 
-	// A page holds the playlists the user only follows too, which are left
-	// out: load on until the list has a good start. Not in the callback, as
-	// root's strings live in the buffer the next request reuses.
-	while (_playlists.size() < (size_t)mFirstPlaylists && _playlistsHaveMore)
-	{
-		int offset = _playlistsOffset;
-		_spotifyClient.GetPlaylists(offset, [](JsonValue& root) { AddPlaylists(root); });
-		if (_playlistsOffset == offset)
-			break;  // failed: its error has been shown, More... follows
-	}
-
+	// Not in the callback: it requests more pages (FillPlaylists), and
+	// root's strings live in the buffer the next request reuses
 	ModePlayer(dialog);
 	InitCursor();
 	// Reset poll timer now that startup blocking is done, so the
@@ -1550,40 +1569,34 @@ void GetPlaylists(DialogPtr dialog)
 	Microseconds(&_lastPollTime);
 }
 
+// Request the page of playlists at offset and add its rows to the list
+static void AddPlaylistPage(int offset)
+{
+	size_t first = _playlists.size();
+	_spotifyClient.GetPlaylists(offset, [](JsonValue& root) { AddPlaylists(root); });
+	PopulateNavList(_navList, first);
+}
+
 // The More... row: load pages of playlists until one adds a row (those the
 // user only follows are left out) or Spotify has no more
 void LoadMorePlaylists()
 {
 	size_t first = _playlists.size();
-
-	WaitCursor();
-	while (_playlistsHaveMore && _playlists.size() == first)
-	{
-		int offset = _playlistsOffset;
-		_spotifyClient.GetPlaylists(offset, [](JsonValue& root) { AddPlaylists(root); });
-		if (_playlistsOffset == offset)
-			break;  // failed: its error has been shown, More... stays
-	}
-	InitCursor();
-
-	PopulateNavList(_navList, first);
-	MacSetPort(_dialog);
-	EraseRect(&(**_navList).rView);
-	LUpdate(_dialog->visRgn, _navList);
+	LoadPages(_playlistsOffset,
+	          [first] { return _playlistsHaveMore && _playlists.size() == first; },
+	          AddPlaylistPage);
+	RedrawNavList();
 }
 
 // Load playlists until the list is full to its bottom edge, so that More...
-// is out of view there, or Spotify has no more (see _fillPlaylistsDue)
+// is out of view there, or Spotify has no more: before ModePlayer first
+// draws it, and after full screen made it taller (_fillPlaylistsDue)
 void FillPlaylists()
 {
 	_fillPlaylistsDue = false;
-	while (_playlistsHaveMore && LastRowShown(_navList))
-	{
-		int offset = _playlistsOffset;
-		LoadMorePlaylists();
-		if (_playlistsOffset == offset)
-			break;  // failed: its error has been shown
-	}
+	LoadPages(_playlistsOffset,
+	          [] { return _playlistsHaveMore && LastRowShown(_navList); },
+	          AddPlaylistPage);
 }
 
 // The next poll is due (see PollSoon)
@@ -1821,9 +1834,9 @@ void UpdateLikeIcon()
 }
 
 // Is the track in Liked Songs? Asked on the idle pass after the cover, and
-// by a click if that check failed. If Spotify won't say (e.g. a login
-// without the permission) the button becomes a plain + and only the log
-// tells why; a click then shows it.
+// by a click if that check failed. If Spotify refuses (e.g. a login without
+// the permission) the button becomes a plain + and only the log tells why;
+// a click then shows it. A lost connection shows its error, as for a poll.
 void CheckLiked()
 {
 	_likeCheckDue = false;

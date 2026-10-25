@@ -32,7 +32,6 @@ class SpotifyClient
 		string DeviceId;  // the Spotify Connect device MacPlayer plays on, "" if none yet
 		SpotifyClient(HttpClient* httpClient, Prefs* prefs);
 		void Login(const string& refreshToken, function<void(LoginResponse)> onComplete);
-		void GetRecentTracks(function<void(JsonValue&)> onComplete);
 		void PlayTrack(const string& contextUri, const string& trackUri, function<void(JsonValue&)> onComplete);
 		void PlayTracks(const vector<string>& trackUris, const string& trackUri,
 		                function<void(JsonValue&)> onComplete);
