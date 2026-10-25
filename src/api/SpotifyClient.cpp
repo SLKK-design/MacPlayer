@@ -182,7 +182,7 @@ void SpotifyClient::GetPlaylistTracks(const string& playlistId, function<void(Js
 void SpotifyClient::GetSavedTracks(function<void(JsonValue&)> onComplete, SpotifyErrorHandler onError)
 {
 	Get(
-		"https://api.spotify.com/v1/me/tracks?limit=20&market=from_token",
+		"https://api.spotify.com/v1/me/tracks?limit=35&market=from_token",
 		false,
 		onComplete,
 		onError);
