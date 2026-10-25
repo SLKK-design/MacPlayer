@@ -65,8 +65,8 @@ resource 'SIZE' (-1) {
 	reserved,
 	reserved,
 	reserved,
-	3000 * 1024,
-	3000 * 1024
+	3000 * 1024,	/* preferred: about half of it is in use when quiet */
+	2400 * 1024	/* minimum: the Finder may start it with this when memory is short */
 };
 
 resource 'MBAR' (128, preload) {
