@@ -40,9 +40,11 @@ class SpotifyClient
 		void PreviousTrack(function<void(JsonValue&)> onComplete);
 		void GetDevices(function<void(JsonValue&)> onComplete);
 		void GetCurrentUser(function<void(JsonValue&)> onComplete);
-		void GetPlaylists(function<void(JsonValue&)> onComplete);
-		void GetPlaylistTracks(const string& playlistId, function<void(JsonValue&)> onComplete);
-		void GetSavedTracks(function<void(JsonValue&)> onComplete, SpotifyErrorHandler onError = nullptr);
+		static const int PageSize = 25;  // playlists or tracks per request
+		void GetPlaylists(int offset, function<void(JsonValue&)> onComplete);
+		void GetPlaylistTracks(const string& playlistId, int offset, function<void(JsonValue&)> onComplete);
+		void GetSavedTracks(int offset, function<void(JsonValue&)> onComplete,
+		                    SpotifyErrorHandler onError = nullptr);
 		void SaveToLibrary(const string& uri, function<void(JsonValue&)> onComplete,
 		                   SpotifyErrorHandler onError = nullptr);
 		void RemoveFromLibrary(const string& uri, function<void(JsonValue&)> onComplete,

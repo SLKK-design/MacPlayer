@@ -11,6 +11,7 @@
 const double mPollFrequencyMs = 30000;
 const int mRestartTrackMs = 3000;  // later into a track, back restarts it
 const int mBrowseTimeoutMs = 60000;  // a track list unused this long gives way to now-playing
+const int mFirstPlaylists = 15;  // playlist rows (with Liked Songs) before the list first shows
 
 enum UIState
 {
@@ -148,7 +149,11 @@ void ViewNowPlaying();
 bool RefreshPlayerState();
 void LoadPendingImage();
 void PollSoon(double delayMs);
-void PopulateTrackList(JsonValue& root);
+void PopulateTrackList(JsonValue& root, bool append);
+void LoadMoreTracks();
+void LoadMorePlaylists();
+void FillPlaylists();
+bool PollDue();
 Track GetTrackObject(JsonValue& track);
 void SetTrackImage(JsonValue& track, Track& trackObj);
 void PollPlayerState(); 
@@ -192,6 +197,6 @@ ListHandle CreateList(
 	int ldef,
 	short cellWidth,
 	short cellHeight);
-void PopulateNavList(ListHandle list);
+void PopulateNavList(ListHandle list, size_t first);
 
 pascal OSErr Quit(AppleEvent* appleEvent, AppleEvent* reply, long refCon);

@@ -85,6 +85,26 @@ static unsigned long _trackStartedAt = 0;
 // gone unused for mBrowseTimeoutMs; its close button does at once.
 static unsigned long _listUsedAt = 0;
 
+// Lists load a page at a time (SpotifyClient::PageSize). The open track
+// list's source (a playlist id, "" for Liked Songs), how many entries of it
+// and of the playlists Spotify has given, and whether it has more.
+static string _pageSourceId;
+static int _tracksOffset = 0;
+static bool _tracksHaveMore = false;
+static int _playlistsOffset = 0;
+static bool _playlistsHaveMore = false;
+
+// Fill the playlist list down to its bottom edge on the next idle pass
+// once nothing else waits (FillPlaylists): after startup, or when full
+// screen makes the list taller
+static bool _fillPlaylistsDue = false;
+
+// The list's last row is in view, also when its rows don't fill it
+static bool LastRowShown(ListHandle list)
+{
+	return (**list).visible.bottom >= (**list).dataBounds.bottom;
+}
+
 // The like button: the track it is for ("" while hidden), whether that is
 // in Liked Songs, whether Spotify has confirmed it, and whether to ask on
 // the next idle pass (CheckLiked)
@@ -228,11 +248,14 @@ void EventLoop()
 		{
 			// Idle: everything else has been drawn by now, so this is when
 			// a waiting album cover loads, then the like button's state is
-			// asked; polling resumes after them
+			// asked, then (unless a poll is due) more playlists fill the
+			// list; polling resumes after them
 			if (!_pendingImage.empty())
 				LoadPendingImage();
 			else if (_likeCheckDue)
 				CheckLiked();
+			else if (_fillPlaylistsDue && !PollDue())
+				FillPlaylists();
 			else
 				PollPlayerState();
 		}
@@ -485,6 +508,11 @@ void HandlePlayerContent(EventRecord *eventPtr, short item)
 				else
 					GetPlaylistTracks(_playlists[cellIndex].uri, _playlists[cellIndex].id);
 			}
+			else if (MacPtInRect(pt, &(**_navList).rView) &&
+			         cellIndex == (short)_playlists.size() && _playlistsHaveMore)
+			{
+				LoadMorePlaylists();  // the More... row
+			}
 			break;
 		}
 
@@ -511,6 +539,10 @@ void HandlePlayerContent(EventRecord *eventPtr, short item)
 				{
 					NoDevicesError();
 				}
+			}
+			else
+			{
+				LoadMoreTracks();  // scrolled to the end
 			}
 
 			break;
@@ -939,67 +971,114 @@ void GetRecentTracks()
 	_spotifyClient.GetRecentTracks(
 		[=](JsonValue& root)
 		{
-			PopulateTrackList(root);
+			PopulateTrackList(root, false);
+			_tracksHaveMore = false;  // no further pages for these
 		});
 }
 
 void GetPlaylistTracks(const string& uri, const string& playlistId)
 {
+	bool loaded = false;
 	_spotifyClient.GetPlaylistTracks(
 		playlistId,
-		[=](JsonValue& root)
+		0,
+		[=, &loaded](JsonValue& root)
 		{
+			loaded = true;
 			_currentContext = uri;
-			PopulateTrackList(root);
+			_pageSourceId = playlistId;
+			PopulateTrackList(root, false);
 		});
+
+	// After the request, as root's strings live in the buffer the next reuses
+	if (loaded)
+		LoadMoreTracks();  // when the first page doesn't fill the list
+}
+
+static void LikedSongsError(int statusCode, const string& body)
+{
+	_spotifyClient.HandleError(SpotifyClient::ErrorText("Liked Songs", statusCode, body));
 }
 
 // Liked Songs isn't a playlist to Spotify: it has its own endpoint, a scope
 // older logins lack, and no context to play from (see PlayTrack)
 void GetLikedSongs()
 {
+	bool loaded = false;
 	_spotifyClient.GetSavedTracks(
-		[=](JsonValue& root)
+		0,
+		[=, &loaded](JsonValue& root)
 		{
+			loaded = true;
 			_currentContext.clear();
-			PopulateTrackList(root);
+			_pageSourceId.clear();
+			PopulateTrackList(root, false);
 		},
-		[](int statusCode, const string& body)
-		{
-			_spotifyClient.HandleError(SpotifyClient::ErrorText("Liked Songs", statusCode, body));
-		});
+		LikedSongsError);
+
+	if (loaded)
+		LoadMoreTracks();
 }
 
-void PopulateTrackList(JsonValue& root)
+// The open track list's next pages while its last row is in view: after a
+// scroll to the end, or while the pages so far don't fill the list.
+// Requests run to completion, so loading can't go on during a scroll.
+void LoadMoreTracks()
+{
+	while (_tracksHaveMore && !_viewNowPlaying && LastRowShown(_trackList))
+	{
+		int offset = _tracksOffset;
+		auto onPage = [](JsonValue& root) { PopulateTrackList(root, true); };
+
+		WaitCursor();
+		if (_pageSourceId.empty())
+			_spotifyClient.GetSavedTracks(offset, onPage, LikedSongsError);
+		else
+			_spotifyClient.GetPlaylistTracks(_pageSourceId, offset, onPage);
+		InitCursor();
+
+		// Failed (its error has been shown; the next scroll to the end tries
+		// again) or an empty page
+		if (_tracksOffset == offset)
+			break;
+	}
+}
+
+// Show a page of tracks: the first replaces the list, a later one
+// (LoadMoreTracks) is added to it
+void PopulateTrackList(JsonValue& root, bool append)
 {
 	JsonValue items = root("items");
 	JsonValue track;
 	Cell cell;
 
+	if (!append)
+	{
+		_viewNowPlaying = false;
+
+		ShowDialogItem(_dialog, kPlayerTrackLabel);
+		ShowDialogItem(_dialog, kPlayerArtistLabel);
+		ShowDialogItem(_dialog, kPlayerTrackList);
+		ShowDialogItem(_dialog, kPlayerCloseList);
+		ShowControl((**_trackList).vScroll);
+
+		EraseRect(&(**_trackList).rView);
+		EraseRect(&_trackImageRect);
+
+		_tracks.clear();
+		LDelRow(0, 0, _trackList);
+		_tracksOffset = 0;
+	}
+
 	int rowNum = (**_trackList).dataBounds.bottom;
-
-	_viewNowPlaying = false;
-
-	ShowDialogItem(_dialog, kPlayerTrackLabel);
-	ShowDialogItem(_dialog, kPlayerArtistLabel);
-	ShowDialogItem(_dialog, kPlayerTrackList);
-	ShowDialogItem(_dialog, kPlayerCloseList);
-	ShowControl((**_trackList).vScroll);
-	
-	EraseRect(&(**_trackList).rView);
-	EraseRect(&_trackImageRect);
-
 	LSetDrawingMode(false, _trackList);
 
 	JsonIterator it = gason::begin(items);
-
-	_tracks.clear();
-	LDelRow(0, 0, _trackList);
-
 	while (it.isValid())
 	{
 		JsonValue father = it->value;
 		Track trackObj;
+		_tracksOffset++;  // the next page starts after removed entries too
 
 		// Playlist items use "item" since Feb 2026; Liked Songs and
 		// recently-played still "track"
@@ -1024,6 +1103,7 @@ void PopulateTrackList(JsonValue& root)
 		rowNum = rowNum + 1;
 		it++;
 	}
+	_tracksHaveMore = root("next").getTag() == JSON_STRING;
 
 	LSetDrawingMode(true, _trackList);
 	InvalRect(&(**_trackList).rView);
@@ -1031,7 +1111,8 @@ void PopulateTrackList(JsonValue& root)
 	if ((**_trackList).vScroll != NULL)
 		InvalRect(&(**(**_trackList).vScroll).contrlRect);
 
-	UpdateDialog(_dialog, _dialog->visRgn);
+	if (!append)
+		UpdateDialog(_dialog, _dialog->visRgn);
 
 	// Its time on screen counts from now: loading it can take seconds
 	_listUsedAt = TickCount();
@@ -1151,7 +1232,7 @@ void ModePlayer(DialogPtr dialog)
 	// Init nav list
 	GetDialogItem(dialog, kPlayerNavList, &type, &itemH, &box);
 	_navList = CreateList(dialog, box, 1, 128, 0, 0);
-	PopulateNavList(_navList);
+	PopulateNavList(_navList, 0);
 
 	// Init track list
 	GetDialogItem(dialog, kPlayerTrackList, &type, &itemH, &box);
@@ -1195,20 +1276,27 @@ ListHandle CreateList(
 			includeScrollBar);
 }
 
-void PopulateNavList(ListHandle list)
+// Add _playlists from index first on to the nav list, then a More... row
+// while Spotify has more playlists (a click on it loads them)
+void PopulateNavList(ListHandle list, size_t first)
 {
 	LSetDrawingMode(false, list);
 
-	int rowNum = (**list).dataBounds.bottom;
-	Cell cell;
+	// The previous More... row goes; a new one follows if there is more
+	short rows = (**list).dataBounds.bottom;
+	if (rows > (short)first)
+		LDelRow(rows - first, first, list);
 
-	for (const auto& playlist : _playlists)
+	for (size_t i = first; i <= _playlists.size(); i++)
 	{
-		rowNum = LAddRow(1, rowNum, list);
-		SetPt(&cell, 0, rowNum);
-		string name = Util::Utf8ToMacRoman(playlist.name);
+		if (i == _playlists.size() && !_playlistsHaveMore)
+			break;
+		string name = i < _playlists.size() ? Util::Utf8ToMacRoman(_playlists[i].name) :
+		              string("More") + '\xC9';  // ... in Mac Roman
+
+		Cell cell;
+		SetPt(&cell, 0, LAddRow(1, (**list).dataBounds.bottom, list));
 		SetListRow(list, cell, &name, 1);
-		rowNum = rowNum + 1;
 	}
 
 	LSetDrawingMode(true, list);
@@ -1226,6 +1314,7 @@ void InitPlayer(DialogPtr dialog)
 	_playerState.repeat = 0;       // off
 	_playerState.progressMs = 0;
 	_listUsedAt = 0;
+	_tracksHaveMore = false;
 	_likeUri.clear();  // ModePlayer hides the button
 	_likeKnown = false;
 	_likeCheckDue = false;
@@ -1257,8 +1346,10 @@ void InitPlayer(DialogPtr dialog)
 	GetDevices();
 
 	// Play button and now-playing come from the device on the first idle
-	// pass, once the library is on screen; its cover loads after that
+	// pass, once the library is on screen; its cover loads after that, and
+	// then further playlists down to the list's bottom edge
 	PollSoon(0);
+	_fillPlaylistsDue = true;
 }
 
 void GetDevices()
@@ -1375,59 +1466,125 @@ void PlayFromTrackList()
 	PlayTrack();
 }
 
+// Add a page of /me/playlists to _playlists
+static void AddPlaylists(JsonValue& root)
+{
+	JsonValue playlists = root("items");
+
+	JsonIterator it = gason::begin(playlists);
+	while (it.isValid())
+	{
+		JsonValue playlistNode = it->value;
+		_playlistsOffset++;
+
+		Playlist playlist;
+		playlist.name = JsonStr(playlistNode("name"));
+		playlist.id = JsonStr(playlistNode("id"));
+		playlist.uri = JsonStr(playlistNode("uri"));
+
+		// Since Feb 2026 Spotify only serves the tracks of playlists the
+		// user owns or collaborates on; leave out ones they only follow
+		string ownerId = JsonStr(playlistNode("owner")("id"));
+		bool collaborative = playlistNode("collaborative").getTag() == JSON_TRUE;
+		bool usable = _userId.empty() || ownerId == _userId || collaborative;
+
+		if (playlistNode.getTag() == JSON_OBJECT && !playlist.id.empty() && usable)
+			_playlists.push_back(playlist);
+		it++;
+	}
+	_playlistsHaveMore = root("next").getTag() == JSON_STRING;
+}
+
 void GetPlaylists(DialogPtr dialog)
 {
+	bool loaded = false;
 	_spotifyClient.GetPlaylists(
-		[=](JsonValue& root)
+		0,
+		[&loaded](JsonValue& root)
 		{
+			loaded = true;
 			_playlists.clear();
+			_playlistsOffset = 0;
 
 			// Liked Songs first, as in Spotify's apps
 			Playlist liked;
 			liked.name = "Liked Songs";
 			_playlists.push_back(liked);
 
-			JsonValue playlists = root("items");
-
-			JsonIterator it = gason::begin(playlists);
-			while (it.isValid())
-			{
-				JsonValue playlistNode = it->value;
-
-				Playlist playlist;
-				playlist.name = JsonStr(playlistNode("name"));
-				playlist.id = JsonStr(playlistNode("id"));
-				playlist.uri = JsonStr(playlistNode("uri"));
-
-				// Since Feb 2026 Spotify only serves the tracks of playlists the
-				// user owns or collaborates on; leave out ones they only follow
-				string ownerId = JsonStr(playlistNode("owner")("id"));
-				bool collaborative = playlistNode("collaborative").getTag() == JSON_TRUE;
-				bool usable = _userId.empty() || ownerId == _userId || collaborative;
-
-				if (playlistNode.getTag() == JSON_OBJECT && !playlist.id.empty() && usable)
-					_playlists.push_back(playlist);
-				it++;
-			}
-
-			ModePlayer(dialog);
-			InitCursor();
-			// Reset poll timer now that startup blocking is done, so the
-			// first poll fires 30 s from here rather than immediately.
-			Microseconds(&_lastPollTime);
+			AddPlaylists(root);
 		});
+	if (!loaded)
+		return;  // its error has been shown; InitPlayer goes back to login
+
+	// A page holds the playlists the user only follows too, which are left
+	// out: load on until the list has a good start. Not in the callback, as
+	// root's strings live in the buffer the next request reuses.
+	while (_playlists.size() < (size_t)mFirstPlaylists && _playlistsHaveMore)
+	{
+		int offset = _playlistsOffset;
+		_spotifyClient.GetPlaylists(offset, [](JsonValue& root) { AddPlaylists(root); });
+		if (_playlistsOffset == offset)
+			break;  // failed: its error has been shown, More... follows
+	}
+
+	ModePlayer(dialog);
+	InitCursor();
+	// Reset poll timer now that startup blocking is done, so the
+	// first poll fires 30 s from here rather than immediately.
+	Microseconds(&_lastPollTime);
 }
 
-void PollPlayerState()
+// The More... row: load pages of playlists until one adds a row (those the
+// user only follows are left out) or Spotify has no more
+void LoadMorePlaylists()
+{
+	size_t first = _playlists.size();
+
+	WaitCursor();
+	while (_playlistsHaveMore && _playlists.size() == first)
+	{
+		int offset = _playlistsOffset;
+		_spotifyClient.GetPlaylists(offset, [](JsonValue& root) { AddPlaylists(root); });
+		if (_playlistsOffset == offset)
+			break;  // failed: its error has been shown, More... stays
+	}
+	InitCursor();
+
+	PopulateNavList(_navList, first);
+	MacSetPort(_dialog);
+	EraseRect(&(**_navList).rView);
+	LUpdate(_dialog->visRgn, _navList);
+}
+
+// Load playlists until the list is full to its bottom edge, so that More...
+// is out of view there, or Spotify has no more (see _fillPlaylistsDue)
+void FillPlaylists()
+{
+	_fillPlaylistsDue = false;
+	while (_playlistsHaveMore && LastRowShown(_navList))
+	{
+		int offset = _playlistsOffset;
+		LoadMorePlaylists();
+		if (_playlistsOffset == offset)
+			break;  // failed: its error has been shown
+	}
+}
+
+// The next poll is due (see PollSoon)
+bool PollDue()
 {
 	UnsignedWide now;
 	Microseconds(&now);
 
 	double diffMs = (Util::MicrosecondToDouble(&now) - Util::MicrosecondToDouble(&_lastPollTime)) / 1000;
+	return diffMs > _pollDelayMs;
+}
 
-	if (diffMs > _pollDelayMs)
+void PollPlayerState()
+{
+	if (PollDue())
 	{
-		_lastPollTime = now;
+		Microseconds(&_lastPollTime);
 		_pollDelayMs = mPollFrequencyMs;
 		RefreshPlayerState();
 	}
@@ -1786,6 +1943,8 @@ void SetFullScreen(bool on)
 void ChooseFullScreen(bool on)
 {
 	SetFullScreen(on);
+	if (on)
+		_fillPlaylistsDue = true;  // the list is taller now
 	if ((_prefs.Data.FullScreen != 0) != on)
 	{
 		_prefs.Data.FullScreen = on ? 1 : 0;

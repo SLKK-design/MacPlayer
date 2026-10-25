@@ -155,23 +155,26 @@ void SpotifyClient::GetCurrentUser(function<void(JsonValue&)> onComplete)
 		onComplete);
 }
 
-void SpotifyClient::GetPlaylists(function<void(JsonValue&)> onComplete)
+// A page of PageSize from offset on; its "next" is null on the last one
+void SpotifyClient::GetPlaylists(int offset, function<void(JsonValue&)> onComplete)
 {
 	Get(
-		"https://api.spotify.com/v1/me/playlists",
+		"https://api.spotify.com/v1/me/playlists?limit=" + to_string(PageSize) +
+		"&offset=" + to_string(offset),
 		false,
 		onComplete);
 }
 
-void SpotifyClient::GetPlaylistTracks(const string& playlistId, function<void(JsonValue&)> onComplete)
+void SpotifyClient::GetPlaylistTracks(const string& playlistId, int offset,
+                                      function<void(JsonValue&)> onComplete)
 {
 	// /tracks was removed in Feb 2026; /items only serves playlists the user
 	// owns or collaborates on, and names each entry "item" (the old "track"
 	// key is deprecated), so ask for both
 	Get(
 		"https://api.spotify.com/v1/playlists/" + playlistId + "/items?"
-		"limit=20&"
-		"fields=items(item(name,uri,album(id,images(url)),artists(name)),"
+		"limit=" + to_string(PageSize) + "&offset=" + to_string(offset) + "&"
+		"fields=next,items(item(name,uri,album(id,images(url)),artists(name)),"
 		"track(name,uri,album(id,images(url)),artists(name)))",
 		false,
 		onComplete);
@@ -179,10 +182,12 @@ void SpotifyClient::GetPlaylistTracks(const string& playlistId, function<void(Js
 
 // Liked Songs, most recently liked first. Unlike /items there is no fields
 // filter; market leaves out the tracks' long available_markets lists.
-void SpotifyClient::GetSavedTracks(function<void(JsonValue&)> onComplete, SpotifyErrorHandler onError)
+void SpotifyClient::GetSavedTracks(int offset, function<void(JsonValue&)> onComplete,
+                                   SpotifyErrorHandler onError)
 {
 	Get(
-		"https://api.spotify.com/v1/me/tracks?limit=35&market=from_token",
+		"https://api.spotify.com/v1/me/tracks?limit=" + to_string(PageSize) +
+		"&offset=" + to_string(offset) + "&market=from_token",
 		false,
 		onComplete,
 		onError);
