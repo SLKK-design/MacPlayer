@@ -10,6 +10,7 @@
 
 const double mPollFrequencyMs = 30000;
 const int mRestartTrackMs = 3000;  // later into a track, back restarts it
+const int mBrowseTimeoutMs = 60000;  // a track list unused this long gives way to now-playing
 
 enum UIState
 {
@@ -49,7 +50,9 @@ enum UIElements
 	kPlayerRepeat = 10,
 	kPlayerVolumeIcon = 11,
 	kPlayerVolumeControl = 12,
-	kPlayerLike = 13,  /* DITL 129's last item */
+	kPlayerLike = 13,
+	kPlayerCloseList = 14,
+	kPlayerLastItem = kPlayerCloseList,  /* DITL 129's last item */
 	kWindowWidth = 505,   /* DLOG 128; DITL 129 is laid out for this size */
 	kWindowHeight = 296,
 	kPlayerStartupDITL = 130,

@@ -182,7 +182,7 @@ resource 'DITL' (129, purgeable) {
 		StaticText { disabled, "TITLE" };
 
 		/* Artist Label */
-		{1, 302, 15, 505},
+		{1, 302, 15, 485},
 		StaticText { disabled, "ARTIST" };
 
 		/* Track List */
@@ -220,6 +220,10 @@ resource 'DITL' (129, purgeable) {
 		/* Like: add the track to Liked Songs, right of its name */
 		{ 266, 116, 282, 132 },
 		Icon { enabled, 140 };
+
+		/* Close the track list: above its scroll bar */
+		{ 0, 489, 16, 505 },
+		Icon { enabled, 143 };
 	}
 };
 
@@ -810,6 +814,40 @@ data 'cicn' (142, "like inactive", purgeable) {
 	$"FFFF CFFC FFCF CFFC FFCF F3FF FF3F F3FF"            /* .............?.. */
 	$"FF3F FFFF FFFF FFFF FFFF FF3F F3FF FF3F"            /* .?.........?...? */
 	$"F3FF FFCC CFFF FFCC CFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF"                           /* .......... */
+};
+
+data 'cicn' (143, "close", purgeable) {
+	$"0000 0000 8004 0000 0000 0020 0020 0000"            /* ........... . .. */
+	$"0000 0000 0000 0048 0000 0048 0000 0000"            /* .......H...H.... */
+	$"0001 0001 0001 0000 0000 0000 0000 0000"            /* ................ */
+	$"0000 0000 0000 0004 0000 0000 0020 0020"            /* ............. .  */
+	$"0000 0000 0004 0000 0000 0020 0020 0000"            /* ........... . .. */
+	$"0000 FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FF3F F3FF FF3F F3FF FFCF CFFF FFCF"            /* ...?...?........ */
+	$"CFFF FFF3 3FFF FFF3 3FFF FFFC FFFF FFFC"            /* ....?...?....... */
+	$"FFFF FFF3 3FFF FFF3 3FFF FFCF CFFF FFCF"            /* ....?...?....... */
+	$"CFFF FF3F F3FF FF3F F3FF FFFF FFFF FFFF"            /* ...?...?........ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF 0000 0000 0000 0001 0000 FFFF FFFF"            /* ................ */
+	$"FFFF 0001 0000 0000 0000 FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FF3F F3FF FF3F"            /* ...........?...? */
+	$"F3FF FFCF CFFF FFCF CFFF FFF3 3FFF FFF3"            /* ............?... */
+	$"3FFF FFFC FFFF FFFC FFFF FFF3 3FFF FFF3"            /* ?...........?... */
+	$"3FFF FFCF CFFF FFCF CFFF FF3F F3FF FF3F"            /* ?..........?...? */
+	$"F3FF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
 	$"FFFF FFFF FFFF FFFF FFFF"                           /* .......... */
 };
 

@@ -36,7 +36,7 @@ static short _coverBitsWidth = 0, _coverBitsHeight = 0;
 static Point _windowPos;
 
 // DITL 129's item rects, for the normal window (see LayoutPlayer)
-static Rect _ditlBox[kPlayerLike + 1];
+static Rect _ditlBox[kPlayerLastItem + 1];
 
 // Spotify's repeat states, in the order the repeat button steps through them
 static const struct { const char* state; short iconId; } kRepeatModes[] =
@@ -79,6 +79,11 @@ static unsigned long _repeatChosenAt = 0;
 // double-click, Next, Previous or Back's restart. Spotify can still report
 // the old position for a moment, so for mRestartTrackMs Back goes by this.
 static unsigned long _trackStartedAt = 0;
+
+// When the track list on screen was loaded or last clicked (TickCount); 0
+// while none is shown. Polls only switch back to now-playing once it has
+// gone unused for mBrowseTimeoutMs; its close button does at once.
+static unsigned long _listUsedAt = 0;
 
 // The like button: the track it is for ("" while hidden), whether that is
 // in Liked Songs, whether Spotify has confirmed it, and whether to ask on
@@ -463,6 +468,8 @@ void HandlePlayerContent(EventRecord *eventPtr, short item)
 		case kPlayerNavList:
 		{
 			// Nav List
+			if (_listUsedAt != 0)
+				_listUsedAt = TickCount();  // still browsing
 			GetMouse(&pt);
 			LClick(pt, 0, _navList);
 			Cell cell = LLastClick(_navList);
@@ -484,6 +491,7 @@ void HandlePlayerContent(EventRecord *eventPtr, short item)
 		case kPlayerTrackList:
 		{
 			// Track List
+			_listUsedAt = TickCount();  // still browsing
 			GetMouse(&pt);
 			bool dblClick = LClick(pt, 0, _trackList);
 			Cell cell = LLastClick(_trackList);
@@ -673,6 +681,10 @@ void HandlePlayerContent(EventRecord *eventPtr, short item)
 			break;
 		}
 
+		case kPlayerCloseList:
+			ViewNowPlaying();
+			break;
+
 		case kPlayerLike:
 		{
 			// Inactive until the idle pass after the cover has asked Spotify
@@ -757,6 +769,8 @@ void PlayTrack()
 void ViewNowPlaying()
 {
 	_viewNowPlaying = true;
+	_listUsedAt = 0;
+	HideDialogItem(_dialog, kPlayerCloseList);
 	HideDialogItem(_dialog, kPlayerTrackLabel);
 	HideDialogItem(_dialog, kPlayerArtistLabel);
 	HideDialogItem(_dialog, kPlayerTrackList);
@@ -969,6 +983,7 @@ void PopulateTrackList(JsonValue& root)
 	ShowDialogItem(_dialog, kPlayerTrackLabel);
 	ShowDialogItem(_dialog, kPlayerArtistLabel);
 	ShowDialogItem(_dialog, kPlayerTrackList);
+	ShowDialogItem(_dialog, kPlayerCloseList);
 	ShowControl((**_trackList).vScroll);
 	
 	EraseRect(&(**_trackList).rView);
@@ -1029,6 +1044,9 @@ void PopulateTrackList(JsonValue& root)
 		InvalRect(&(**(**_trackList).vScroll).contrlRect);
 
 	UpdateDialog(_dialog, _dialog->visRgn);
+
+	// Its time on screen counts from now: loading it can take seconds
+	_listUsedAt = TickCount();
 }
 
 Track GetTrackObject(JsonValue& track)
@@ -1131,7 +1149,7 @@ void ModePlayer(DialogPtr dialog)
 	AppendDITL(dialog, ditl, overlayDITL);
 	ReleaseResource(ditl);
 
-	for (short item = 1; item <= kPlayerLike; item++)
+	for (short item = 1; item <= kPlayerLastItem; item++)
 	{
 		GetDialogItem(dialog, item, &type, &itemH, &box);
 		_ditlBox[item] = box;
@@ -1140,6 +1158,7 @@ void ModePlayer(DialogPtr dialog)
 	HideDialogItem(dialog, kPlayerTrackLabel);
 	HideDialogItem(dialog, kPlayerArtistLabel);
 	HideDialogItem(dialog, kPlayerLike);  // until a track is shown
+	HideDialogItem(dialog, kPlayerCloseList);  // shown with a track list
 
 	// Init nav list
 	GetDialogItem(dialog, kPlayerNavList, &type, &itemH, &box);
@@ -1227,6 +1246,7 @@ void InitPlayer(DialogPtr dialog)
 	_playerState.shuffle = false;  // as DITL 129's icons show them
 	_playerState.repeat = 0;       // off
 	_playerState.progressMs = 0;
+	_listUsedAt = 0;
 	_likeUri.clear();  // ModePlayer hides the button
 	_likeKnown = false;
 	_likeCheckDue = false;
@@ -1536,14 +1556,20 @@ bool RefreshPlayerState()
 					{
 						string trackUri = JsonStr(uri);
 
+						// A track list in use stays; the name below it
+						// still follows the track (see _listUsedAt)
+						bool browsing = _listUsedAt != 0 &&
+						                TickCount() - _listUsedAt < mBrowseTimeoutMs * 60 / 1000;
+
 						if (trackUri != _currentTrack.uri)
 						{
 							_currentTrack = GetTrackObject(track);
 							DrawTrackName();
 							UpdateLikeButton();
-							ViewNowPlaying();
+							if (!browsing)
+								ViewNowPlaying();
 						}
-						else if (!_viewNowPlaying)
+						else if (!_viewNowPlaying && !browsing)
 						{
 							// Same track but now-playing view not shown yet — show it
 							DrawTrackName();
@@ -1872,13 +1898,16 @@ void LayoutPlayer()
 	Rect trackBox = DitlBox(kPlayerTrackList, tracks, 0, dr, dv);
 	short artist = tracks + (dr - tracks) / 2;
 	PlaceItem(kPlayerTrackLabel, DitlBox(kPlayerTrackLabel, tracks, 0, tracks, 0));
-	PlaceItem(kPlayerArtistLabel, DitlBox(kPlayerArtistLabel, artist, 0, artist, 0));
+	// Its right edge stays clear of the close button: the Dialog Manager gives
+	// a click to the first item whose rect has it, disabled or not
+	PlaceItem(kPlayerArtistLabel, DitlBox(kPlayerArtistLabel, artist, 0, dr, 0));
 	PlaceItem(kPlayerTrackList, trackBox);
 	PlaceList(_trackList, trackBox);
 
 	for (short item = kPlayerPlayButton; item <= kPlayerRepeat; item++)
 		PlaceItem(item, DitlBox(item, dc, dv, dc, dv));
 	PlaceItem(kPlayerLike, DitlBox(kPlayerLike, 0, dv, 0, dv));  // next to the track name
+	PlaceItem(kPlayerCloseList, DitlBox(kPlayerCloseList, dr, 0, dr, 0));  // above the list's scroll bar
 	PlaceItem(kPlayerVolumeIcon, DitlBox(kPlayerVolumeIcon, dr, dv, dr, dv));
 	Rect volumeBox = DitlBox(kPlayerVolumeControl, dr, dv, dr, dv);
 	PlaceItem(kPlayerVolumeControl, volumeBox);
