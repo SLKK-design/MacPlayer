@@ -173,8 +173,8 @@ resource 'DITL' (129, purgeable) {
 		{1, 4, 15, 100},
 		StaticText { disabled, "PLAYLISTS" };
 
-		/* Nav List */
-		{ 17, 5, 250, 113 },
+		/* Nav List: from x 2, where its speaker goes (DarkListDef) */
+		{ 17, 2, 250, 113 },
 		UserItem { enabled };
 
 		/* Track Label */

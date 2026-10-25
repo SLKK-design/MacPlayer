@@ -97,6 +97,13 @@ static bool _playlistsHaveMore = false;
 // once nothing else waits (FillPlaylists)
 static bool _fillPlaylistsDue = false;
 
+// What Spotify plays from, for the speaker in the playlist list: a playlist's
+// URI, Liked Songs as spotify:user:<id>:collection (what Spotify's apps
+// start), "" for none. Liked Songs that MacPlayer starts has no context
+// (see PlayTrack), so it remembers that.
+static string _playingContext;
+static bool _playingLikedSongs = false;
+
 // The list's last row is in view, also when its rows don't fill it
 static bool LastRowShown(ListHandle list)
 {
@@ -829,6 +836,11 @@ void PlayTrack()
 	// The play button and now-playing change once Spotify plays the track
 	auto onPlaying = [=](JsonValue& root)
 	{
+		// The speaker moves at once, not on the next poll
+		_playingContext = _currentContext;
+		_playingLikedSongs = _currentContext.empty();
+		MarkActivePlaylist(true);
+
 		_trackStartedAt = TickCount();
 		_playerState.isPlaying = true;
 		TogglePlayButtonIcon();
@@ -1332,6 +1344,27 @@ ListHandle CreateList(
 			includeScrollBar);
 }
 
+// Mark the playlist that plays, if the list has it. Without draw the
+// caller draws the list.
+void MarkActivePlaylist(bool draw)
+{
+	if (_navList == 0)
+		return;
+
+	short row = -1;
+	if (_playingContext.empty() ? _playingLikedSongs :
+	    _playingContext.find(":collection") != string::npos)
+		row = 0;  // Liked Songs, the first row
+	else
+		for (size_t i = 1; i < _playlists.size() && !_playingContext.empty(); i++)
+			if (_playlists[i].uri == _playingContext)
+			{
+				row = i;
+				break;
+			}
+	SetListMark(_navList, row, draw);
+}
+
 // Add _playlists from index first on to the nav list, then a More... row
 // while Spotify has more playlists (a click on it loads them)
 void PopulateNavList(ListHandle list, size_t first)
@@ -1355,6 +1388,9 @@ void PopulateNavList(ListHandle list, size_t first)
 		SetListRow(list, cell, &name, 1);
 	}
 
+	// Its gutter, and the speaker if the playlist that plays is among the rows
+	// now; the callers draw the list
+	MarkActivePlaylist(false);
 	LSetDrawingMode(true, list);
 }
 
@@ -1371,6 +1407,8 @@ void InitPlayer(DialogPtr dialog)
 	_playerState.progressMs = 0;
 	_listUsedAt = 0;
 	_tracksHaveMore = false;
+	_playingContext.clear();
+	_playingLikedSongs = false;
 	_likeUri.clear();  // ModePlayer hides the button
 	_likeKnown = false;
 	_likeCheckDue = false;
@@ -1760,6 +1798,14 @@ bool RefreshPlayerState()
 			_playerState.progressMs =
 				onOurDevice && progress.getTag() == JSON_NUMBER ? progress.toInt() : 0;
 
+			// What it plays from, for the playlist list's speaker. Without a
+			// context it is Liked Songs only if MacPlayer started that.
+			string context = JsonStr(root("context")("uri"));
+			if (!context.empty() || root.getTag() != JSON_OBJECT)
+				_playingLikedSongs = false;  // something else, or nothing plays (204)
+			_playingContext = context;
+			MarkActivePlaylist(true);
+
 			// Not in the Device menu (switched on after the list was read):
 			// read the list again. Last, as root's strings live in the
 			// response buffer the next request reuses.
@@ -2049,8 +2095,8 @@ static void PlaceList(ListHandle list, const Rect& box)
 // Fit the player to the window's size, from DITL 129's rects for the normal
 // window. The lists grow, the controls row stays at the bottom (centred,
 // the volume at the right) and the cover takes the space above it. In full
-// screen the playlists start at x 10 and are 50 px wider, and the cover
-// fills everything right of them, cropped to that shape.
+// screen the playlists are 54 px wider (their names at x 14 either way),
+// and the cover fills everything right of them, cropped to that shape.
 void LayoutPlayer()
 {
 	short w = _dialog->portRect.right - _dialog->portRect.left;
@@ -2058,18 +2104,18 @@ void LayoutPlayer()
 	short dv = h - kWindowHeight;     // the controls row moves down
 	short dr = w - kWindowWidth;      // right-aligned items move right
 	short dc = dr / 2;                // centred items
-	short wider = _fullScreen ? 50 : 0;
-	short inset = _fullScreen ? 5 : 0;  // playlists at x 10, like the track name below
-	short tracks = inset + wider;      // the track list starts this much further right
+	short tracks = _fullScreen ? 55 : 0;   // wider playlists: the track list starts further right
+	short navInset = _fullScreen ? 1 : 0;  // the playlists' speaker at x 2, in full screen 3
 
 	// System 7 flashes its network activity arrows in the screen's top-left
 	// corner, normally on the menu bar: in full screen, keep the label clear
 	short arrows = _fullScreen ? 10 : 0;
 
 	PlaceItem(kPlayerPlaylistsLabel, DitlBox(kPlayerPlaylistsLabel, arrows, 0, arrows, 0));
-	Rect navBox = DitlBox(kPlayerNavList, inset, 0, tracks, dv);
+	Rect navBox = DitlBox(kPlayerNavList, navInset, 0, tracks, dv);
 	PlaceItem(kPlayerNavList, navBox);
 	PlaceList(_navList, navBox);
+	SetListGutter(_navList, 14 - navBox.left);  // playlist names at x 14 in either layout
 
 	// The artist column starts halfway the track list
 	Rect trackBox = DitlBox(kPlayerTrackList, tracks, 0, dr, dv);

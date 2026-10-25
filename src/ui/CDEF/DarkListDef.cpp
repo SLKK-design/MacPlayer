@@ -31,6 +31,35 @@ void SetListRow(ListHandle list, Cell cell, const string* columns, short count)
 	LSetCell(data, len, cell, list);
 }
 
+// Indent the list's rows by width; the caller draws the list
+void SetListGutter(ListHandle list, short width)
+{
+	(**list).refCon = ((long)width << 16) | ((**list).refCon & 0xFFFF);
+}
+
+// Put the speaker at row (-1: none). With draw, the rows that change are drawn
+// at once.
+void SetListMark(ListHandle list, short row, bool draw)
+{
+	short old = (short)((**list).refCon & 0xFFFF) - 1;
+	(**list).refCon = ((**list).refCon & 0xFFFF0000) | (unsigned short)(row + 1);
+	if (!draw || row == old)
+		return;
+
+	Cell cell = { 0, 0 };
+	short rows = (**list).dataBounds.bottom;
+	if (old >= 0 && old < rows)
+	{
+		cell.v = old;
+		LDraw(cell, list);
+	}
+	if (row >= 0 && row < rows)
+	{
+		cell.v = row;
+		LDraw(cell, list);
+	}
+}
+
 extern "C"
 {
 
@@ -78,13 +107,29 @@ extern "C"
 		short len = sizeof(data);
 		LGetCell(data, &len, cell, list);
 
+		// The gutter, and in the marked row a speaker at its left edge, level
+		// with the text: 5 x 6 px, a cone widening to the right, then sound
+		long refCon = (**list).refCon;
+		short gutter = (short)(refCon >> 16);
+		if ((short)(refCon & 0xFFFF) == cell.v + 1)
+		{
+			short x = cellRect->left, y = cellRect->top + 4;
+			MoveTo(x, y + 2);
+			MacLineTo(x, y + 3);
+			MoveTo(x + 1, y + 1);
+			MacLineTo(x + 1, y + 4);
+			MoveTo(x + 2, y);
+			MacLineTo(x + 2, y + 5);
+			MoveTo(x + 4, y + 2);
+			MacLineTo(x + 4, y + 3);
+		}
+
 		short count = len > 0 ? data[0] : 0;
 		if (count > kListColumnsMax)
 			count = kListColumnsMax;
-		short cellWidth = (count > 0)
-		    ? (cellRect->right - cellRect->left) / count
-		    : (cellRect->right - cellRect->left);
-		short offset = 0;
+		short width = cellRect->right - cellRect->left - gutter;
+		short cellWidth = (count > 0) ? width / count : width;
+		short offset = gutter;
 		short pos = 1;
 
 		for (int i = 0; i < count && pos < len && pos + 1 + data[pos] <= len; i++)

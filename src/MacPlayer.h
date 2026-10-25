@@ -153,6 +153,7 @@ void PopulateTrackList(JsonValue& root, bool append);
 void LoadMoreTracks();
 void LoadMorePlaylists();
 void FillPlaylists();
+void MarkActivePlaylist(bool draw);
 bool PollDue();
 Track GetTrackObject(JsonValue& track);
 void SetTrackImage(JsonValue& track, Track& trackObj);
