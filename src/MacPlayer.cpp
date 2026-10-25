@@ -456,7 +456,10 @@ void HandlePlayerContent(EventRecord *eventPtr, short item)
 			if (MacPtInRect(pt, &(**_navList).rView) &&
 			    cellIndex >= 0 && cellIndex < (short)_playlists.size())
 			{
-				GetPlaylistTracks(_playlists[cellIndex].uri, _playlists[cellIndex].id);
+				if (_playlists[cellIndex].id.empty())
+					GetLikedSongs();
+				else
+					GetPlaylistTracks(_playlists[cellIndex].uri, _playlists[cellIndex].id);
 			}
 			break;
 		}
@@ -672,16 +675,26 @@ void HandlePlayerContent(EventRecord *eventPtr, short item)
 void PlayTrack()
 {
 	// The play button and now-playing change once Spotify plays the track
-	_spotifyClient.PlayTrack(
-		_currentContext,
-		_currentTrack.uri, 
-		[=](JsonValue& root)
-		{
-			_playerState.isPlaying = true;
-			TogglePlayButtonIcon();
-			DrawTrackName();
-			ViewNowPlaying();
-		});
+	auto onPlaying = [=](JsonValue& root)
+	{
+		_playerState.isPlaying = true;
+		TogglePlayButtonIcon();
+		DrawTrackName();
+		ViewNowPlaying();
+	};
+
+	if (_currentContext.empty())
+	{
+		// Liked Songs: no context Spotify plays, so hand it the listed tracks
+		vector<string> uris;
+		for (const Track& track : _tracks)
+			uris.push_back(track.uri);
+		_spotifyClient.PlayTracks(uris, _currentTrack.uri, onPlaying);
+	}
+	else
+	{
+		_spotifyClient.PlayTrack(_currentContext, _currentTrack.uri, onPlaying);
+	}
 }
 
 void ViewNowPlaying()
@@ -870,6 +883,28 @@ void GetPlaylistTracks(const string& uri, const string& playlistId)
 		});
 }
 
+// Liked Songs isn't a playlist to Spotify: it has its own endpoint, a scope
+// older logins lack, and no context to play from (see PlayTrack)
+void GetLikedSongs()
+{
+	_spotifyClient.GetSavedTracks(
+		[=](JsonValue& root)
+		{
+			_currentContext.clear();
+			PopulateTrackList(root);
+		},
+		[](int statusCode, const string& body)
+		{
+			string message = "Liked Songs failed: HTTP " + to_string(statusCode) + "\r" +
+			                 SpotifyClient::ErrorMessage(body);
+			if (statusCode == 403)
+				message += "\r\rIf the login is from before MacPlayer showed Liked Songs, "
+				           "it lacks the permission: run tools/spotify_auth.py again and "
+				           "copy the new MacPlayer Preferences into System Folder:Preferences.";
+			_spotifyClient.HandleError(message);
+		});
+}
+
 void PopulateTrackList(JsonValue& root)
 {
 	JsonValue items = root("items");
@@ -901,7 +936,8 @@ void PopulateTrackList(JsonValue& root)
 		ListRow row;
 		Track trackObj;
 
-		// Playlist items use "item" since Feb 2026; recently-played still "track"
+		// Playlist items use "item" since Feb 2026; Liked Songs and
+		// recently-played still "track"
 		track = father("item");
 		if (track.getTag() != JSON_OBJECT)
 			track = father("track");
@@ -1291,6 +1327,12 @@ void GetPlaylists(DialogPtr dialog)
 		[=](JsonValue& root)
 		{
 			_playlists.clear();
+
+			// Liked Songs first, as in Spotify's apps
+			Playlist liked;
+			liked.name = "Liked Songs";
+			_playlists.push_back(liked);
+
 			JsonValue playlists = root("items");
 
 			JsonIterator it = gason::begin(playlists);

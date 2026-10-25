@@ -49,6 +49,7 @@ SCOPES = " ".join([
     "user-read-playback-state",
     "user-modify-playback-state",
     "user-read-recently-played",
+    "user-library-read",
     "playlist-read-private",
     "playlist-read-collaborative",
 ])

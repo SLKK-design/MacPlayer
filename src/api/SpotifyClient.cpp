@@ -99,6 +99,21 @@ void SpotifyClient::PlayTrack(const string& contextUri, const string& trackUri, 
 		onComplete);
 }
 
+// Play trackUris from trackUri on: for Liked Songs, which Spotify doesn't
+// take as a context to play
+void SpotifyClient::PlayTracks(const vector<string>& trackUris, const string& trackUri,
+                               function<void(JsonValue&)> onComplete)
+{
+	string uris;
+	for (const string& uri : trackUris)
+		uris += (uris.empty() ? "\"" : ", \"") + uri + "\"";
+	Put(
+		PlayerUrl("play"),
+		false,
+		"{ \"uris\": [" + uris + "], \"offset\": { \"uri\": \"" + trackUri + "\" } }",
+		onComplete);
+}
+
 void SpotifyClient::NextTrack(function<void(JsonValue&)> onComplete)
 {
 	Post(
@@ -153,6 +168,17 @@ void SpotifyClient::GetPlaylistTracks(const string& playlistId, function<void(Js
 		"track(name,uri,album(id,images(url)),artists(name)))",
 		false,
 		onComplete);
+}
+
+// Liked Songs, most recently liked first. Unlike /items there is no fields
+// filter; market leaves out the tracks' long available_markets lists.
+void SpotifyClient::GetSavedTracks(function<void(JsonValue&)> onComplete, SpotifyErrorHandler onError)
+{
+	Get(
+		"https://api.spotify.com/v1/me/tracks?limit=20&market=from_token",
+		false,
+		onComplete,
+		onError);
 }
 
 /* Transfer playback to deviceId. "play": false keeps it as it was, playing
@@ -369,9 +395,10 @@ void SpotifyClient::SetRepeat(const string& state, function<void(JsonValue&)> on
 		onComplete);
 }
 
-void SpotifyClient::Get(string uri, bool debug, function<void(JsonValue&)> onComplete)
+void SpotifyClient::Get(string uri, bool debug, function<void(JsonValue&)> onComplete,
+                        SpotifyErrorHandler onError)
 {
-	Request(uri, "", debug, onComplete, bind(&SpotifyClient::DoGet, this, _1), true, nullptr);
+	Request(uri, "", debug, onComplete, bind(&SpotifyClient::DoGet, this, _1), true, onError);
 }
 
 // Player commands: Spotify documents 204 but also answers 200 with a body

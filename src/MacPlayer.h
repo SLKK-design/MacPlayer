@@ -75,7 +75,7 @@ struct Device
 struct Playlist
 {
 	string name;
-	string id;
+	string id;  // "" for Liked Songs
 	string uri;
 };
 
@@ -134,6 +134,7 @@ void HandlePlayerContent(EventRecord *eventPtr, short item);
 void GetRecentTracks();
 void GetPlaylists(DialogPtr dialog);
 void GetPlaylistTracks(const string& uri, const string& playlistId);
+void GetLikedSongs();
 void InitCustomLDEF();
 void PlayTrack();
 void ViewNowPlaying();

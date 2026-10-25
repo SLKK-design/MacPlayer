@@ -1,4 +1,5 @@
 #include <string>
+#include <vector>
 #include <map>
 #include <functional>
 #include "gason.hpp"
@@ -33,12 +34,15 @@ class SpotifyClient
 		void Login(const string& refreshToken, function<void(LoginResponse)> onComplete);
 		void GetRecentTracks(function<void(JsonValue&)> onComplete);
 		void PlayTrack(const string& contextUri, const string& trackUri, function<void(JsonValue&)> onComplete);
+		void PlayTracks(const vector<string>& trackUris, const string& trackUri,
+		                function<void(JsonValue&)> onComplete);
 		void NextTrack(function<void(JsonValue&)> onComplete);
 		void PreviousTrack(function<void(JsonValue&)> onComplete);
 		void GetDevices(function<void(JsonValue&)> onComplete);
 		void GetCurrentUser(function<void(JsonValue&)> onComplete);
 		void GetPlaylists(function<void(JsonValue&)> onComplete);
 		void GetPlaylistTracks(const string& playlistId, function<void(JsonValue&)> onComplete);
+		void GetSavedTracks(function<void(JsonValue&)> onComplete, SpotifyErrorHandler onError = nullptr);
 		void ActivateDevice(const string& deviceId, function<void(JsonValue&)> onComplete,
 		                    SpotifyErrorHandler onError = nullptr);
 		void GetImage(const string& image, const string& albumId, function<void()> onComplete);
@@ -72,6 +76,7 @@ class SpotifyClient
 			"user-read-playback-state "
 			"user-modify-playback-state "
 			"user-read-recently-played "
+			"user-library-read "
 			"playlist-read-private "
 			"playlist-read-collaborative";
 
@@ -85,7 +90,8 @@ class SpotifyClient
 
 		bool WakeDevice();
 		string PlayerUrl(const string& command, const string& query = "");
-		void Get(string uri, bool debug, function<void(JsonValue&)> onComplete);
+		void Get(string uri, bool debug, function<void(JsonValue&)> onComplete,
+		         SpotifyErrorHandler onError = nullptr);
 		void Post(string uri, bool debug, string content, function<void(JsonValue&)> onComplete,
 		          SpotifyErrorHandler onError = nullptr);
 		void Put(string uri, bool debug, string content, function<void(JsonValue&)> onComplete,
