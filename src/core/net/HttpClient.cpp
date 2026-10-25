@@ -193,6 +193,12 @@ void HttpClient::Put(const Uri& requestUri, const string& content, function<void
 	PutPost(requestUri, "PUT", content, onComplete);
 }
 
+/* MacPlayer: DELETE, to take a track out of Liked Songs */
+void HttpClient::Delete(const Uri& requestUri, function<void(HttpResponse&)> onComplete)
+{
+	PutPost(requestUri, "DELETE", "", onComplete);
+}
+
 /* MacPlayer: form POST, used for the token endpoint at accounts.spotify.com */
 void HttpClient::PostForm(const string& requestUri, const string& content, function<void(HttpResponse&)> onComplete)
 {

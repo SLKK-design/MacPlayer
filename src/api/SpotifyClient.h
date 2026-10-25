@@ -43,6 +43,12 @@ class SpotifyClient
 		void GetPlaylists(function<void(JsonValue&)> onComplete);
 		void GetPlaylistTracks(const string& playlistId, function<void(JsonValue&)> onComplete);
 		void GetSavedTracks(function<void(JsonValue&)> onComplete, SpotifyErrorHandler onError = nullptr);
+		void SaveToLibrary(const string& uri, function<void(JsonValue&)> onComplete,
+		                   SpotifyErrorHandler onError = nullptr);
+		void RemoveFromLibrary(const string& uri, function<void(JsonValue&)> onComplete,
+		                       SpotifyErrorHandler onError = nullptr);
+		void IsInLibrary(const string& uri, function<void(JsonValue&)> onComplete,
+		                 SpotifyErrorHandler onError = nullptr);
 		void ActivateDevice(const string& deviceId, function<void(JsonValue&)> onComplete,
 		                    SpotifyErrorHandler onError = nullptr);
 		void GetImage(const string& image, const string& albumId, function<void()> onComplete);
@@ -77,6 +83,7 @@ class SpotifyClient
 			"user-modify-playback-state "
 			"user-read-recently-played "
 			"user-library-read "
+			"user-library-modify "
 			"playlist-read-private "
 			"playlist-read-collaborative";
 
@@ -96,6 +103,8 @@ class SpotifyClient
 		          SpotifyErrorHandler onError = nullptr);
 		void Put(string uri, bool debug, string content, function<void(JsonValue&)> onComplete,
 		         SpotifyErrorHandler onError = nullptr);
+		void Delete(string uri, bool debug, function<void(JsonValue&)> onComplete,
+		            SpotifyErrorHandler onError = nullptr);
 		void Request(
 			string uri,
 			string content,
@@ -108,6 +117,7 @@ class SpotifyClient
 		void DoGet(int requestId);
 		void DoPost(int requestId);
 		void DoPut(int requestId);
+		void DoDelete(int requestId);
 		void HandleHttpResponse(HttpResponse& response, int requestId);
 		void RefreshAccessToken(int requestId);
 		bool RequestAccessToken();

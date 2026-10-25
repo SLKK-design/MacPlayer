@@ -49,6 +49,7 @@ enum UIElements
 	kPlayerRepeat = 10,
 	kPlayerVolumeIcon = 11,
 	kPlayerVolumeControl = 12,
+	kPlayerLike = 13,  /* DITL 129's last item */
 	kWindowWidth = 505,   /* DLOG 128; DITL 129 is laid out for this size */
 	kWindowHeight = 296,
 	kPlayerStartupDITL = 130,
@@ -61,6 +62,8 @@ enum UIElements
 	kPlayerRepeatIcon = 132,
 	kPlayerRepeatOnIcon = 138,
 	kPlayerRepeatOneIcon = 139,
+	kPlayerLikeIcon = 140,
+	kPlayerLikedIcon = 141,
 	kAboutDialog = 133,
 	kPlaceholderImage = 134
 };
@@ -149,6 +152,9 @@ void DrawTrackImage();
 void TogglePlayButtonIcon();
 void UpdateShuffleIcon();
 void UpdateRepeatIcon();
+void UpdateLikeButton();
+void UpdateLikeIcon();
+void CheckLiked();
 void ExitApp();
 void ActivateDevice(int index);
 void GetDevices();

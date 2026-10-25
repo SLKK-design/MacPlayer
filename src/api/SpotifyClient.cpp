@@ -181,6 +181,40 @@ void SpotifyClient::GetSavedTracks(function<void(JsonValue&)> onComplete, Spotif
 		onError);
 }
 
+// Liked Songs (and the rest of the library) by Spotify URI: since Feb 2026
+// /me/library, the /me/tracks ones that wrote or checked it are gone
+void SpotifyClient::SaveToLibrary(const string& uri, function<void(JsonValue&)> onComplete,
+                                  SpotifyErrorHandler onError)
+{
+	Put(
+		"https://api.spotify.com/v1/me/library?uris=" + Uri::Encode(uri),
+		false,
+		"",
+		onComplete,
+		onError);
+}
+
+void SpotifyClient::RemoveFromLibrary(const string& uri, function<void(JsonValue&)> onComplete,
+                                      SpotifyErrorHandler onError)
+{
+	Delete(
+		"https://api.spotify.com/v1/me/library?uris=" + Uri::Encode(uri),
+		false,
+		onComplete,
+		onError);
+}
+
+// Answers a JSON array: [true] when uri is in the library
+void SpotifyClient::IsInLibrary(const string& uri, function<void(JsonValue&)> onComplete,
+                                SpotifyErrorHandler onError)
+{
+	Get(
+		"https://api.spotify.com/v1/me/library/contains?uris=" + Uri::Encode(uri),
+		false,
+		onComplete,
+		onError);
+}
+
 /* Transfer playback to deviceId. "play": false keeps it as it was, playing
  * or paused ("play": true would start a paused track). */
 void SpotifyClient::ActivateDevice(const string& deviceId, function<void(JsonValue&)> onComplete,
@@ -415,6 +449,12 @@ void SpotifyClient::Put(string uri, bool debug, string content, function<void(Js
 	Request(uri, content, debug, onComplete, bind(&SpotifyClient::DoPut, this, _1), false, onError);
 }
 
+void SpotifyClient::Delete(string uri, bool debug, function<void(JsonValue&)> onComplete,
+                           SpotifyErrorHandler onError)
+{
+	Request(uri, "", debug, onComplete, bind(&SpotifyClient::DoDelete, this, _1), false, onError);
+}
+
 void SpotifyClient::Request(
 	string uri, 
 	string content, 
@@ -464,6 +504,15 @@ void SpotifyClient::DoPut(int requestId)
 	SpotifyRequest request = _requests[requestId];
 	Uri uri(request.Uri);
 	_httpClient->Put(uri, request.Content, [this, requestId](HttpResponse& response) {
+		HandleHttpResponse(response, requestId);
+	});
+}
+
+void SpotifyClient::DoDelete(int requestId)
+{
+	SpotifyRequest request = _requests[requestId];
+	Uri uri(request.Uri);
+	_httpClient->Delete(uri, [this, requestId](HttpResponse& response) {
 		HandleHttpResponse(response, requestId);
 	});
 }

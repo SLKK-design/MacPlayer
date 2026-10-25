@@ -216,6 +216,10 @@ resource 'DITL' (129, purgeable) {
 		/* Volume Slider */
 		{ 266, 420, 281, 495 },
 		Control {enabled, 128 };
+
+		/* Like: add the track to Liked Songs, right of its name */
+		{ 266, 116, 282, 132 },
+		Icon { enabled, 140 };
 	}
 };
 
@@ -705,6 +709,74 @@ data 'cicn' (139, "repeat one", purgeable) {
 	$"FF0F F000 003F F000 003F FC3F FFFF FC3F"            /* .....?...?.?...? */
 	$"FFFF FF3F FFFF FF3F FFFF FFFC 3FFF FFFC"            /* ...?...?....?... */
 	$"3FFF FFFC 3FFF FFFC 3FFF"                           /* ?...?...?. */
+};
+
+data 'cicn' (140, "like", purgeable) {
+	$"0000 0000 8004 0000 0000 0020 0020 0000"            /* ........... . .. */
+	$"0000 0000 0000 0048 0000 0048 0000 0000"            /* .......H...H.... */
+	$"0001 0001 0001 0000 0000 0000 0000 0000"            /* ................ */
+	$"0000 0000 0000 0004 0000 0000 0020 0020"            /* ............. .  */
+	$"0000 0000 0004 0000 0000 0020 0020 0000"            /* ........... . .. */
+	$"0000 FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFC0 0FFF FFC0 0FFF FC3F F0FF FC3F"            /* ...........?...? */
+	$"F0FF F3FF FF3F F3FF FF3F CFFF FFCF CFFF"            /* .....?...?...... */
+	$"FFCF CFFC FFCF CFFC FFCF 3FFC FFF3 3FFC"            /* ..........?...?. */
+	$"FFF3 3FFC FFF3 3FFC FFF3 3F00 03F3 3F00"            /* ..?...?...?...?. */
+	$"03F3 3FFC FFF3 3FFC FFF3 3FFC FFF3 3FFC"            /* ..?...?...?...?. */
+	$"FFF3 CFFC FFCF CFFC FFCF CFFF FFCF CFFF"            /* ................ */
+	$"FFCF F3FF FF3F F3FF FF3F FC3F F0FF FC3F"            /* .....?...?.?...? */
+	$"F0FF FFC0 0FFF FFC0 0FFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF 0000 0000 0000 0001 0000 FFFF FFFF"            /* ................ */
+	$"FFFF 0001 0000 0000 0000 FFC0 0FFF FFC0"            /* ................ */
+	$"0FFF FC3F F0FF FC3F F0FF F3FF FF3F F3FF"            /* ...?...?.....?.. */
+	$"FF3F CFFF FFCF CFFF FFCF CFFC FFCF CFFC"            /* .?.............. */
+	$"FFCF 3FFC FFF3 3FFC FFF3 3FFC FFF3 3FFC"            /* ..?...?...?...?. */
+	$"FFF3 3F00 03F3 3F00 03F3 3FFC FFF3 3FFC"            /* ..?...?...?...?. */
+	$"FFF3 3FFC FFF3 3FFC FFF3 CFFC FFCF CFFC"            /* ..?...?......... */
+	$"FFCF CFFF FFCF CFFF FFCF F3FF FF3F F3FF"            /* .............?.. */
+	$"FF3F FC3F F0FF FC3F F0FF FFC0 0FFF FFC0"            /* .?.?...?........ */
+	$"0FFF FFFF FFFF FFFF FFFF"                           /* .......... */
+};
+
+data 'cicn' (141, "liked", purgeable) {
+	$"0000 0000 8004 0000 0000 0020 0020 0000"            /* ........... . .. */
+	$"0000 0000 0000 0048 0000 0048 0000 0000"            /* .......H...H.... */
+	$"0001 0001 0001 0000 0000 0000 0000 0000"            /* ................ */
+	$"0000 0000 0000 0004 0000 0000 0020 0020"            /* ............. .  */
+	$"0000 0000 0004 0000 0000 0020 0020 0000"            /* ........... . .. */
+	$"0000 FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFC0 0FFF FFC0 0FFF FC00 00FF FC00"            /* ................ */
+	$"00FF F000 003F F000 003F C000 000F C000"            /* .....?...?...... */
+	$"000F C000 000F C000 000F 0000 0C03 0000"            /* ................ */
+	$"0C03 0000 3003 0000 3003 00C0 C003 00C0"            /* ....0...0....... */
+	$"C003 0033 0003 0033 0003 000C 0003 000C"            /* ...3...3........ */
+	$"0003 C000 000F C000 000F C000 000F C000"            /* ................ */
+	$"000F F000 003F F000 003F FC00 00FF FC00"            /* .....?...?...... */
+	$"00FF FFC0 0FFF FFC0 0FFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF 0000 0000 0000 0001 0000 FFFF FFFF"            /* ................ */
+	$"FFFF 0001 0000 0000 0000 FFC0 0FFF FFC0"            /* ................ */
+	$"0FFF FC00 00FF FC00 00FF F000 003F F000"            /* .............?.. */
+	$"003F C000 000F C000 000F C000 000F C000"            /* .?.............. */
+	$"000F 0000 0C03 0000 0C03 0000 3003 0000"            /* ............0... */
+	$"3003 00C0 C003 00C0 C003 0033 0003 0033"            /* 0..........3...3 */
+	$"0003 000C 0003 000C 0003 C000 000F C000"            /* ................ */
+	$"000F C000 000F C000 000F F000 003F F000"            /* .............?.. */
+	$"003F FC00 00FF FC00 00FF FFC0 0FFF FFC0"            /* .?.............. */
+	$"0FFF FFFF FFFF FFFF FFFF"                           /* .......... */
 };
 
 data 'PICT' (132, "macplayer-black", purgeable) {

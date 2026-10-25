@@ -36,7 +36,7 @@ static short _coverBitsWidth = 0, _coverBitsHeight = 0;
 static Point _windowPos;
 
 // DITL 129's item rects, for the normal window (see LayoutPlayer)
-static Rect _ditlBox[kPlayerVolumeControl + 1];
+static Rect _ditlBox[kPlayerLike + 1];
 
 // Spotify's repeat states, in the order the repeat button steps through them
 static const struct { const char* state; short iconId; } kRepeatModes[] =
@@ -73,6 +73,25 @@ static unsigned long _deviceChosenAt = 0;
 // after that Spotify can still report the old state; RefreshPlayerState
 // doesn't take it.
 static unsigned long _playModeChosenAt = 0;
+
+// The like button: the track it is for ("" while hidden), whether that is
+// in Liked Songs, and whether Spotify is still to be asked (CheckLiked)
+static string _likeUri;
+static bool _liked = false;
+static bool _likeUnknown = false;
+
+// A Liked Songs request failed. A 403 most likely means a login from before
+// MacPlayer used Liked Songs, which lacks the permission for it.
+static void LibraryError(const string& what, int statusCode, const string& body)
+{
+	string message = what + " failed: HTTP " + to_string(statusCode) + "\r" +
+	                 SpotifyClient::ErrorMessage(body);
+	if (statusCode == 403)
+		message += "\r\rA login from before this version of MacPlayer lacks the "
+		           "permission for Liked Songs: run tools/spotify_auth.py again and "
+		           "copy the new MacPlayer Preferences into System Folder:Preferences.";
+	_spotifyClient.HandleError(message);
+}
 
 int main()
 {
@@ -207,9 +226,12 @@ void EventLoop()
 		}
 		else if (_uiState == Player)
 		{
-			// Idle: everything else has been drawn by now, so this is when a
-			// waiting album cover loads; polling resumes after it
-			if (!_pendingImage.empty())
+			// Idle: everything else has been drawn by now, so this is when
+			// the like button's state is asked and a waiting album cover
+			// loads; polling resumes after them
+			if (_likeUnknown)
+				CheckLiked();
+			else if (!_pendingImage.empty())
 				LoadPendingImage();
 			else
 				PollPlayerState();
@@ -651,6 +673,29 @@ void HandlePlayerContent(EventRecord *eventPtr, short item)
 			break;
 		}
 
+		case kPlayerLike:
+		{
+			// Add the track to Liked Songs, or take it out again
+			bool like = !_liked;
+			auto onDone = [like](JsonValue& root)
+			{
+				_liked = like;
+				_likeUnknown = false;
+				UpdateLikeIcon();
+			};
+			auto onError = [like](int statusCode, const string& body)
+			{
+				LibraryError(like ? "Adding to Liked Songs" : "Removing from Liked Songs",
+				             statusCode, body);
+			};
+
+			if (like)
+				_spotifyClient.SaveToLibrary(_likeUri, onDone, onError);
+			else
+				_spotifyClient.RemoveFromLibrary(_likeUri, onDone, onError);
+			break;
+		}
+
 		case kPlayerVolumeControl:
 		{
 			pt = eventPtr->where;
@@ -680,6 +725,7 @@ void PlayTrack()
 		_playerState.isPlaying = true;
 		TogglePlayButtonIcon();
 		DrawTrackName();
+		UpdateLikeButton();
 		ViewNowPlaying();
 	};
 
@@ -832,10 +878,10 @@ void DrawTrackImage()
 
 void DrawTrackName()
 {
-	// Bottom left, next to the controls row
+	// Bottom left, next to the controls row; the like button follows it
 	short bottom = _dialog->portRect.bottom;
 	Rect trackRect;
-	MacSetRect(&trackRect, 10, bottom - 34, 130, bottom - 6);
+	MacSetRect(&trackRect, 10, bottom - 34, 112, bottom - 6);
 	EraseRect(&trackRect);
 
 	short length;
@@ -843,7 +889,7 @@ void DrawTrackName()
 	string name = Util::Utf8ToMacRoman(_currentTrack.name);
 	const char* cName = name.c_str();
 	length = strlen(cName);
-	TruncText(120, (Ptr)cName, &length, truncEnd);
+	TruncText(100, (Ptr)cName, &length, truncEnd);
 
 	unsigned char* pName = Util::CtoPStr((char*)cName);
 	pName[0] = length;
@@ -854,7 +900,7 @@ void DrawTrackName()
 	string artist = Util::Utf8ToMacRoman(_currentTrack.artist);
 	const char* cArtist = artist.c_str();
 	length = strlen(cArtist);
-	TruncText(120, (Ptr)cArtist, &length, truncEnd);
+	TruncText(100, (Ptr)cArtist, &length, truncEnd);
 
 	unsigned char* pArtist = Util::CtoPStr((char*)cArtist);
 	pArtist[0] = length;
@@ -895,13 +941,7 @@ void GetLikedSongs()
 		},
 		[](int statusCode, const string& body)
 		{
-			string message = "Liked Songs failed: HTTP " + to_string(statusCode) + "\r" +
-			                 SpotifyClient::ErrorMessage(body);
-			if (statusCode == 403)
-				message += "\r\rIf the login is from before MacPlayer showed Liked Songs, "
-				           "it lacks the permission: run tools/spotify_auth.py again and "
-				           "copy the new MacPlayer Preferences into System Folder:Preferences.";
-			_spotifyClient.HandleError(message);
+			LibraryError("Liked Songs", statusCode, body);
 		});
 }
 
@@ -1080,7 +1120,7 @@ void ModePlayer(DialogPtr dialog)
 	AppendDITL(dialog, ditl, overlayDITL);
 	ReleaseResource(ditl);
 
-	for (short item = 1; item <= kPlayerVolumeControl; item++)
+	for (short item = 1; item <= kPlayerLike; item++)
 	{
 		GetDialogItem(dialog, item, &type, &itemH, &box);
 		_ditlBox[item] = box;
@@ -1088,6 +1128,7 @@ void ModePlayer(DialogPtr dialog)
 
 	HideDialogItem(dialog, kPlayerTrackLabel);
 	HideDialogItem(dialog, kPlayerArtistLabel);
+	HideDialogItem(dialog, kPlayerLike);  // until a track is shown
 
 	// Init nav list
 	GetDialogItem(dialog, kPlayerNavList, &type, &itemH, &box);
@@ -1175,6 +1216,8 @@ void InitPlayer(DialogPtr dialog)
 	_playerState.shuffle = false;  // as DITL 129's icons show them
 	_playerState.repeat = 0;       // off
 	_playerState.progressMs = 0;
+	_likeUri.clear();  // ModePlayer hides the button
+	_likeUnknown = false;
 	_pendingImage.clear();
 	_imageAlbumId.clear();
 
@@ -1485,6 +1528,7 @@ bool RefreshPlayerState()
 						{
 							_currentTrack = GetTrackObject(track);
 							DrawTrackName();
+							UpdateLikeButton();
 							ViewNowPlaying();
 						}
 						else if (!_viewNowPlaying)
@@ -1548,6 +1592,55 @@ void UpdateShuffleIcon()
 void UpdateRepeatIcon()
 {
 	SetItemIcon(kPlayerRepeat, kRepeatModes[_playerState.repeat].iconId);
+}
+
+// Point the like button at the track on screen. A new one shows + until an
+// idle pass has asked Spotify (CheckLiked). Hidden for local files, which
+// Spotify can't add to Liked Songs.
+void UpdateLikeButton()
+{
+	if (_currentTrack.uri == _likeUri)
+		return;
+
+	_likeUri = _currentTrack.uri;
+	_liked = false;
+	_likeUnknown = !_likeUri.empty() && _likeUri.compare(0, 14, "spotify:local:") != 0;
+	if (_likeUnknown)
+	{
+		ShowDialogItem(_dialog, kPlayerLike);
+		UpdateLikeIcon();
+	}
+	else
+	{
+		HideDialogItem(_dialog, kPlayerLike);
+	}
+}
+
+// Like Spotify's: + in a circle, a filled circle with a check once liked
+void UpdateLikeIcon()
+{
+	SetItemIcon(kPlayerLike, _liked ? kPlayerLikedIcon : kPlayerLikeIcon);
+}
+
+// Idle-time half of UpdateLikeButton: is the track in Liked Songs? If Spotify
+// won't say (e.g. a login without the permission) the button stays +; a
+// click then shows why.
+void CheckLiked()
+{
+	_likeUnknown = false;
+	_spotifyClient.IsInLibrary(_likeUri,
+		[](JsonValue& root)
+		{
+			if (root.getTag() == JSON_ARRAY && root[0].getTag() == JSON_TRUE)
+			{
+				_liked = true;
+				UpdateLikeIcon();
+			}
+		},
+		[](int statusCode, const string& body)
+		{
+			DebugLog("Like", ("check failed: HTTP " + to_string(statusCode)).c_str());
+		});
 }
 
 void HandleUpdate(EventRecord *eventPtr)
@@ -1763,6 +1856,7 @@ void LayoutPlayer()
 
 	for (short item = kPlayerPlayButton; item <= kPlayerRepeat; item++)
 		PlaceItem(item, DitlBox(item, dc, dv, dc, dv));
+	PlaceItem(kPlayerLike, DitlBox(kPlayerLike, 0, dv, 0, dv));  // next to the track name
 	PlaceItem(kPlayerVolumeIcon, DitlBox(kPlayerVolumeIcon, dr, dv, dr, dv));
 	Rect volumeBox = DitlBox(kPlayerVolumeControl, dr, dv, dr, dv);
 	PlaceItem(kPlayerVolumeControl, volumeBox);

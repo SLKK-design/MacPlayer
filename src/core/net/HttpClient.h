@@ -3,7 +3,7 @@
    Ported from the Claude-86 boilerplate (src/core/net). MacPlayer changes
    are marked "MacPlayer:" so the two copies can be diffed and kept in sync:
      · Authorization header instead of x-api-key
-     · public Put (real PUT) and PostForm
+     · public Put (real PUT), Delete and PostForm
      · several hosts on one client: SwitchHost, SetSessionHost and
        SetSecondSessionHost (those two hosts' tickets are cached on disk,
        the DNS entry only for the session host)
@@ -75,6 +75,7 @@ public:
 	void Get(const Uri& requestUri, std::function<void(HttpResponse&)> onComplete);
 	void Post(const Uri& requestUri, const string& content, std::function<void(HttpResponse&)> onComplete);
 	void Put(const Uri& requestUri, const string& content, function<void(HttpResponse&)> onComplete); /* MacPlayer: public, real PUT */
+	void Delete(const Uri& requestUri, function<void(HttpResponse&)> onComplete); /* MacPlayer: for Liked Songs */
 	void SetAuthorization(string authorization); /* MacPlayer: full value, e.g. "Bearer ..." */
 	void SetExtraHeaders(const char* headers);  /* appended after Authorization */
 	void SetYieldHook(void (*hook)());          /* called inside MacYield; removes compile-time coupling to UI */
