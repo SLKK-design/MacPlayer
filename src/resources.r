@@ -779,6 +779,40 @@ data 'cicn' (141, "liked", purgeable) {
 	$"FFFF FFFF FFFF FFFF FFFF"                           /* .......... */
 };
 
+data 'cicn' (142, "like inactive", purgeable) {
+	$"0000 0000 8004 0000 0000 0020 0020 0000"            /* ........... . .. */
+	$"0000 0000 0000 0048 0000 0048 0000 0000"            /* .......H...H.... */
+	$"0001 0001 0001 0000 0000 0000 0000 0000"            /* ................ */
+	$"0000 0000 0000 0004 0000 0000 0020 0020"            /* ............. .  */
+	$"0000 0000 0004 0000 0000 0020 0020 0000"            /* ........... . .. */
+	$"0000 FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFCC CFFF FFCC"            /* ................ */
+	$"CFFF FF3F F3FF FF3F F3FF FFFF FFFF FFFF"            /* ...?...?........ */
+	$"FFFF F3FF FF3F F3FF FF3F CFFC FFCF CFFC"            /* .....?...?...... */
+	$"FFCF FFFF FFFF FFFF FFFF CFCC CFCF CFCC"            /* ................ */
+	$"CFCF FFFF FFFF FFFF FFFF CFFC FFCF CFFC"            /* ................ */
+	$"FFCF F3FF FF3F F3FF FF3F FFFF FFFF FFFF"            /* .....?...?...... */
+	$"FFFF FF3F F3FF FF3F F3FF FFCC CFFF FFCC"            /* ...?...?........ */
+	$"CFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF 0000 0000 0000 0001 0000 FFFF FFFF"            /* ................ */
+	$"FFFF 0001 0000 0000 0000 FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFCC CFFF FFCC CFFF FF3F F3FF FF3F"            /* ...........?...? */
+	$"F3FF FFFF FFFF FFFF FFFF F3FF FF3F F3FF"            /* .............?.. */
+	$"FF3F CFFC FFCF CFFC FFCF FFFF FFFF FFFF"            /* .?.............. */
+	$"FFFF CFCC CFCF CFCC CFCF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF CFFC FFCF CFFC FFCF F3FF FF3F F3FF"            /* .............?.. */
+	$"FF3F FFFF FFFF FFFF FFFF FF3F F3FF FF3F"            /* .?.........?...? */
+	$"F3FF FFCC CFFF FFCC CFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF"                           /* .......... */
+};
+
 data 'PICT' (132, "macplayer-black", purgeable) {
 	$"0B1D 0000 0000 0079 0145 1101 A101 F200"            /* .......y.E..�... */
 	$"1638 4249 4D00 0000 0000 0000 7901 4547"            /* .8BIM.......y.EG */

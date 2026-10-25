@@ -64,6 +64,7 @@ enum UIElements
 	kPlayerRepeatOneIcon = 139,
 	kPlayerLikeIcon = 140,
 	kPlayerLikedIcon = 141,
+	kPlayerLikeInactiveIcon = 142,
 	kAboutDialog = 133,
 	kPlaceholderImage = 134
 };

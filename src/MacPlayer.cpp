@@ -222,12 +222,12 @@ void EventLoop()
 		else if (_uiState == Player)
 		{
 			// Idle: everything else has been drawn by now, so this is when
-			// the like button's state is asked and a waiting album cover
-			// loads; polling resumes after them
-			if (_likeCheckDue)
-				CheckLiked();
-			else if (!_pendingImage.empty())
+			// a waiting album cover loads, then the like button's state is
+			// asked; polling resumes after them
+			if (!_pendingImage.empty())
 				LoadPendingImage();
+			else if (_likeCheckDue)
+				CheckLiked();
 			else
 				PollPlayerState();
 		}
@@ -675,9 +675,12 @@ void HandlePlayerContent(EventRecord *eventPtr, short item)
 
 		case kPlayerLike:
 		{
+			// Inactive until the idle pass after the cover has asked Spotify
+			if (_likeCheckDue)
+				break;
+
 			// Add the track to Liked Songs, or take it out again. Switch what
-			// Spotify has: ask first while that isn't confirmed (not asked
-			// yet, or the check failed)
+			// Spotify has: ask again first if the check failed
 			WaitCursor();
 			if (!_likeKnown)
 				CheckLiked();
@@ -1607,9 +1610,10 @@ void UpdateRepeatIcon()
 	SetItemIcon(kPlayerRepeat, kRepeatModes[_playerState.repeat].iconId);
 }
 
-// Point the like button at the track on screen. A new one shows + until an
-// idle pass has asked Spotify (CheckLiked). Hidden for local files, which
-// Spotify can't add to Liked Songs.
+// Point the like button at the track on screen. For a new one it is
+// inactive until an idle pass after the cover has asked Spotify
+// (CheckLiked). Hidden for local files, which Spotify can't add to Liked
+// Songs.
 void UpdateLikeButton()
 {
 	if (_currentTrack.uri == _likeUri)
@@ -1630,35 +1634,35 @@ void UpdateLikeButton()
 	}
 }
 
-// Like Spotify's: + in a circle, a filled circle with a check once liked
+// Like Spotify's: + in a circle, a filled circle with a check once liked;
+// dotted while Spotify is still to be asked
 void UpdateLikeIcon()
 {
-	SetItemIcon(kPlayerLike, _liked ? kPlayerLikedIcon : kPlayerLikeIcon);
+	SetItemIcon(kPlayerLike, _likeCheckDue ? kPlayerLikeInactiveIcon :
+	                         _liked ? kPlayerLikedIcon : kPlayerLikeIcon);
 }
 
-// Is the track in Liked Songs? Asked on an idle pass after UpdateLikeButton,
-// and by a click while that hasn't answered. If Spotify won't say (e.g. a
-// login without the permission) only the log tells; a click shows why.
+// Is the track in Liked Songs? Asked on the idle pass after the cover, and
+// by a click if that check failed. If Spotify won't say (e.g. a login
+// without the permission) the button becomes a plain + and only the log
+// tells why; a click then shows it.
 void CheckLiked()
 {
 	_likeCheckDue = false;
 	_spotifyClient.IsInLibrary(_likeUri,
 		[](JsonValue& root)
 		{
-			if (root.getTag() != JSON_ARRAY)
-				return;
-			_likeKnown = true;
-			bool liked = root[0].getTag() == JSON_TRUE;
-			if (liked != _liked)
+			if (root.getTag() == JSON_ARRAY)
 			{
-				_liked = liked;
-				UpdateLikeIcon();
+				_likeKnown = true;
+				_liked = root[0].getTag() == JSON_TRUE;
 			}
 		},
 		[](int statusCode, const string& body)
 		{
 			DebugLog("Like", ("check failed: HTTP " + to_string(statusCode)).c_str());
 		});
+	UpdateLikeIcon();  // no longer inactive
 }
 
 void HandleUpdate(EventRecord *eventPtr)
