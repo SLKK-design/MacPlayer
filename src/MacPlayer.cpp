@@ -172,6 +172,14 @@ static void ChangePlayMode(function<void()> change)
 	InitCursor();
 }
 
+// Unselect every row, drawing the change
+static void DeselectAll(ListHandle list)
+{
+	Cell cell = { 0, 0 };
+	while (LGetSelect(true, &cell, list))
+		LSetSelect(false, cell, list);
+}
+
 // Draw the playlist list anew after its rows changed with drawing off
 static void RedrawNavList()
 {
@@ -853,6 +861,8 @@ void ViewNowPlaying()
 {
 	_viewNowPlaying = true;
 	_listUsedAt = 0;
+	if (_navList != 0)
+		DeselectAll(_navList);  // its track list is closed
 	HideDialogItem(_dialog, kPlayerCloseList);
 	HideDialogItem(_dialog, kPlayerTrackLabel);
 	HideDialogItem(_dialog, kPlayerArtistLabel);
