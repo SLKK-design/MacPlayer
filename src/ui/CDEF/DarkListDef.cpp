@@ -6,6 +6,31 @@
 #include "Util.h"
 #include "DarkListDef.h"
 
+// Store a row of count columns of Mac Roman text. A column longer than
+// kListTextMax keeps its first kListTextMax - 1 characters and an ellipsis.
+void SetListRow(ListHandle list, Cell cell, const string* columns, short count)
+{
+	unsigned char data[1 + kListColumnsMax * (1 + kListTextMax)];
+	short len = 0;
+
+	if (count > kListColumnsMax)
+		count = kListColumnsMax;
+	data[len++] = (unsigned char)count;
+	for (short i = 0; i < count; i++)
+	{
+		size_t n = columns[i].size();
+		bool cut = n > (size_t)kListTextMax;
+		if (cut)
+			n = kListTextMax - 1;
+		data[len++] = (unsigned char)(cut ? n + 1 : n);
+		memcpy(data + len, columns[i].data(), n);
+		len += n;
+		if (cut)
+			data[len++] = 0xC9;  // ... as one character in Mac Roman
+	}
+	LSetCell(data, len, cell, list);
+}
+
 extern "C"
 {
 
@@ -49,16 +74,27 @@ extern "C"
 		TextSize(9);
 		ForeColor(whiteColor);
 
-		ListRow row;
-		LGetCell(&row, (short*)&dataLen, cell, list);
+		unsigned char data[1 + kListColumnsMax * (1 + kListTextMax)];
+		short len = sizeof(data);
+		LGetCell(data, &len, cell, list);
 
-		short cellWidth = (row.CellCount > 0)
-		    ? (cellRect->right - cellRect->left) / row.CellCount
+		short count = len > 0 ? data[0] : 0;
+		if (count > kListColumnsMax)
+			count = kListColumnsMax;
+		short cellWidth = (count > 0)
+		    ? (cellRect->right - cellRect->left) / count
 		    : (cellRect->right - cellRect->left);
 		short offset = 0;
+		short pos = 1;
 
-		for (int i = 0; i < row.CellCount; i++)
+		for (int i = 0; i < count && pos < len && pos + 1 + data[pos] <= len; i++)
 		{
+			// Cut with an ellipsis where it would run into the next column
+			Str255 text;
+			memcpy(text, data + pos, data[pos] + 1);
+			pos += data[pos] + 1;
+			TruncString(cellWidth - 6, text, truncEnd);
+
 			textMode = srcCopy;
 
 			if (i == 0 && selected)
@@ -68,7 +104,7 @@ extern "C"
 
 			TextMode(textMode);
 			MoveTo(cellRect->left + offset, cellRect->top + 10);
-			DrawString((ConstStr255Param)row.Cells[i].Content);
+			DrawString(text);
 
 			offset += cellWidth;
 		}

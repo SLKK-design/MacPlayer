@@ -999,7 +999,6 @@ void PopulateTrackList(JsonValue& root)
 	while (it.isValid())
 	{
 		JsonValue father = it->value;
-		ListRow row;
 		Track trackObj;
 
 		// Playlist items use "item" since Feb 2026; Liked Songs and
@@ -1016,22 +1015,11 @@ void PopulateTrackList(JsonValue& root)
 		trackObj = GetTrackObject(track);
 		_tracks.push_back(trackObj);
 
-		row.CellCount = 2;
-
-		string macTrackName = Util::Utf8ToMacRoman(trackObj.name);
-		size_t nameLen = macTrackName.size();
-		if (nameLen > 255) nameLen = 255;
-		row.Cells[0].Content[0] = (unsigned char)nameLen;
-		memcpy(row.Cells[0].Content + 1, macTrackName.c_str(), nameLen);
-		string macArtist = Util::Utf8ToMacRoman(trackObj.artist);
-		size_t artistLen = macArtist.size();
-		if (artistLen > 255) artistLen = 255;
-		row.Cells[1].Content[0] = (unsigned char)artistLen;
-		memcpy(row.Cells[1].Content + 1, macArtist.c_str(), artistLen);
-
 		rowNum = LAddRow(1, rowNum, _trackList);
 		SetPt(&cell, 0, rowNum);
-		LSetCell(&row, sizeof(ListRow), cell, _trackList);
+		const string columns[] =
+			{ Util::Utf8ToMacRoman(trackObj.name), Util::Utf8ToMacRoman(trackObj.artist) };
+		SetListRow(_trackList, cell, columns, 2);
 
 		rowNum = rowNum + 1;
 		it++;
@@ -1213,22 +1201,13 @@ void PopulateNavList(ListHandle list)
 
 	int rowNum = (**list).dataBounds.bottom;
 	Cell cell;
-	ListRow row;
 
 	for (const auto& playlist : _playlists)
 	{
-		row.CellCount = 1;
-
 		rowNum = LAddRow(1, rowNum, list);
 		SetPt(&cell, 0, rowNum);
-
-		string macName = Util::Utf8ToMacRoman(playlist.name);
-		size_t len = macName.size();
-		if (len > 255) len = 255;
-		row.Cells[0].Content[0] = (unsigned char)len;
-		memcpy(row.Cells[0].Content + 1, macName.c_str(), len);
-
-		LSetCell(&row, sizeof(ListRow), cell, list);
+		string name = Util::Utf8ToMacRoman(playlist.name);
+		SetListRow(list, cell, &name, 1);
 		rowNum = rowNum + 1;
 	}
 
