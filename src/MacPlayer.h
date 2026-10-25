@@ -9,6 +9,7 @@
 #include "SpotifyClient.h"
 
 const double mPollFrequencyMs = 30000;
+const int mRestartTrackMs = 3000;  // later into a track, back restarts it
 
 enum UIState
 {
@@ -55,6 +56,11 @@ enum UIElements
 	kPlayerMainDITL = 129,
 	kPlayerPlayIcon = 128,
 	kPlayerPauseIcon = 136,
+	kPlayerShuffleIcon = 131,
+	kPlayerShuffleOnIcon = 137,
+	kPlayerRepeatIcon = 132,
+	kPlayerRepeatOnIcon = 138,
+	kPlayerRepeatOneIcon = 139,
 	kAboutDialog = 133,
 	kPlaceholderImage = 134
 };
@@ -86,6 +92,9 @@ struct Track
 struct PlayerState
 {
 	bool isPlaying;
+	bool shuffle;
+	short repeat;    // index in kRepeatModes (MacPlayer.cpp): off, context, track
+	int progressMs;  // into the track at the last RefreshPlayerState; 0 if unknown
 };
 
 bool _run = true;
@@ -128,7 +137,7 @@ void GetPlaylistTracks(const string& uri, const string& playlistId);
 void InitCustomLDEF();
 void PlayTrack();
 void ViewNowPlaying();
-void RefreshPlayerState();
+bool RefreshPlayerState();
 void LoadPendingImage();
 void PollSoon(double delayMs);
 void PopulateTrackList(JsonValue& root);
@@ -137,6 +146,8 @@ void SetTrackImage(JsonValue& track, Track& trackObj);
 void PollPlayerState(); 
 void DrawTrackImage();
 void TogglePlayButtonIcon();
+void UpdateShuffleIcon();
+void UpdateRepeatIcon();
 void ExitApp();
 void ActivateDevice(int index);
 void GetDevices();

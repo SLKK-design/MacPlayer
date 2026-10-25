@@ -46,6 +46,9 @@ class SpotifyClient
 		void Play(function<void(JsonValue&)> onComplete, SpotifyErrorHandler onError = nullptr);
 		void Pause(function<void(JsonValue&)> onComplete, SpotifyErrorHandler onError = nullptr);
 		void SetVolume(int volumePercent, function<void(JsonValue&)> onComplete);
+		void Seek(int positionMs, function<void(JsonValue&)> onComplete);
+		void SetShuffle(bool shuffle, function<void(JsonValue&)> onComplete);
+		void SetRepeat(const string& state, function<void(JsonValue&)> onComplete);
 		void HandleError(const string& errorMsg);
 		static string ErrorMessage(const string& body);
 		void InitCache();

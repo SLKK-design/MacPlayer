@@ -38,9 +38,14 @@ static Point _windowPos;
 // DITL 129's item rects, for the normal window (see LayoutPlayer)
 static Rect _ditlBox[kPlayerVolumeControl + 1];
 
-// The play/pause cicn TogglePlayButtonIcon put in the play button, so the
-// next toggle can free it. Forgotten whenever the dialog items are rebuilt.
-static CIconHandle _playIcon = nil;
+// Spotify's repeat states, in the order the repeat button steps through them
+static const struct { const char* state; short iconId; } kRepeatModes[] =
+{
+	{ "off", kPlayerRepeatIcon },
+	{ "context", kPlayerRepeatOnIcon },  // the playlist or album: a dot underneath
+	{ "track", kPlayerRepeatOneIcon }    // this track: also a 1 inside the arrows
+};
+static const short kRepeatModeCount = sizeof(kRepeatModes) / sizeof(kRepeatModes[0]);
 
 using namespace gason;
 
@@ -63,6 +68,11 @@ static bool HaveDevice()
 // moment after that Spotify still reports the old device as the one that
 // plays; RefreshPlayerState doesn't follow it back.
 static unsigned long _deviceChosenAt = 0;
+
+// When shuffle or repeat was last changed here (TickCount). For a moment
+// after that Spotify can still report the old state; RefreshPlayerState
+// doesn't take it.
+static unsigned long _playModeChosenAt = 0;
 
 int main()
 {
@@ -529,16 +539,32 @@ void HandlePlayerContent(EventRecord *eventPtr, short item)
 		{
 			if (HaveDevice())
 			{
-				TrackChanging();
-				_spotifyClient.PreviousTrack(
-					[=](JsonValue& root)
+				// As in Spotify's apps, back restarts the track unless it has
+				// only just begun. Read where it is first: since the last poll
+				// it may have been paused or changed elsewhere, which this also
+				// shows. If that fails, its error has been shown: stop there.
+				WaitCursor();
+				if (RefreshPlayerState())
+				{
+					if (_playerState.progressMs > mRestartTrackMs)
 					{
-						// Asked at once, Spotify can still report the old track:
-						// poll again shortly. Clearing the uri makes that poll
-						// redraw whatever it finds.
-						_currentTrack.uri = "";
-						PollSoon(1500);
-					});
+						_spotifyClient.Seek(0, [](JsonValue& root) {});
+					}
+					else
+					{
+						TrackChanging();
+						_spotifyClient.PreviousTrack(
+							[=](JsonValue& root)
+							{
+								// Asked at once, Spotify can still report the old
+								// track: poll again shortly. Clearing the uri makes
+								// that poll redraw whatever it finds.
+								_currentTrack.uri = "";
+								PollSoon(1500);
+							});
+					}
+				}
+				InitCursor();
 			}
 			else
 			{
@@ -561,6 +587,59 @@ void HandlePlayerContent(EventRecord *eventPtr, short item)
 						_currentTrack.uri = "";
 						PollSoon(1500);
 					});
+			}
+			else
+			{
+				NoDevicesError();
+			}
+			break;
+		}
+
+		case kPlayerShuffle:
+		{
+			if (HaveDevice())
+			{
+				// Switch what Spotify has now: it may have been changed
+				// elsewhere since the last poll
+				WaitCursor();
+				if (RefreshPlayerState())
+				{
+					bool shuffle = !_playerState.shuffle;
+					_spotifyClient.SetShuffle(shuffle,
+						[shuffle](JsonValue& root)
+						{
+							_playerState.shuffle = shuffle;
+							_playModeChosenAt = TickCount();
+							UpdateShuffleIcon();
+						});
+				}
+				InitCursor();
+			}
+			else
+			{
+				NoDevicesError();
+			}
+			break;
+		}
+
+		case kPlayerRepeat:
+		{
+			if (HaveDevice())
+			{
+				// Step on from what Spotify has now, as for shuffle
+				WaitCursor();
+				if (RefreshPlayerState())
+				{
+					short repeat = (_playerState.repeat + 1) % kRepeatModeCount;
+					_spotifyClient.SetRepeat(kRepeatModes[repeat].state,
+						[repeat](JsonValue& root)
+						{
+							_playerState.repeat = repeat;
+							_playModeChosenAt = TickCount();
+							UpdateRepeatIcon();
+						});
+				}
+				InitCursor();
 			}
 			else
 			{
@@ -911,7 +990,6 @@ void WaitCursor()
 void ModeInit(DialogPtr dialog)
 {
 	_uiState = Init;
-	_playIcon = nil;  // dialog items are rebuilt below
 
 	// Its items are laid out for the normal window
 	SetFullScreen(false);
@@ -932,7 +1010,6 @@ void ModeInit(DialogPtr dialog)
 void ModeLogin(DialogPtr dialog)
 {
 	_uiState = Login;
-	_playIcon = nil;  // dialog items are rebuilt below
 
 	// Its items are laid out for the normal window
 	SetFullScreen(false);
@@ -957,7 +1034,6 @@ void ModePlayer(DialogPtr dialog)
 	Rect box;
 
 	_uiState = Player;
-	_playIcon = nil;  // dialog items are rebuilt below
 	DisposePlayerLists();
 
 	MacSetPort(dialog);
@@ -1060,6 +1136,9 @@ void InitPlayer(DialogPtr dialog)
 
 	_currentTrack = Track();
 	_playerState.isPlaying = false;
+	_playerState.shuffle = false;  // as DITL 129's icons show them
+	_playerState.repeat = 0;       // off
+	_playerState.progressMs = 0;
 	_pendingImage.clear();
 	_imageAlbumId.clear();
 
@@ -1266,13 +1345,16 @@ void PollSoon(double delayMs)
 	_pollDelayMs = delayMs;
 }
 
-// Ask Spotify what is playing and bring the play button, volume and
-// now-playing view in line with it
-void RefreshPlayerState()
+// Ask Spotify what is playing and bring the play button, shuffle, repeat,
+// volume and now-playing view in line with it. False when Spotify couldn't
+// be asked; the error has been shown then.
+bool RefreshPlayerState()
 {
+	bool answered = false;
 	_spotifyClient.GetPlayerState(
-		[=](JsonValue& root)
+		[=, &answered](JsonValue& root)
 		{
+			answered = true;
 			bool isPlaying = root("is_playing").getTag() == JSON_TRUE;
 
 			if (isPlaying != _playerState.isPlaying)
@@ -1281,8 +1363,33 @@ void RefreshPlayerState()
 				TogglePlayButtonIcon();
 			}
 
+			// Shuffle and repeat, also when changed in another Spotify app,
+			// but not just after a change here (see _playModeChosenAt).
+			// Absent when nothing plays (204): keep what is shown.
+			if (TickCount() - _playModeChosenAt > 600)
+			{
+				JsonValue shuffle = root("shuffle_state");
+				bool shuffleOn = shuffle.getTag() == JSON_TRUE;
+				if (shuffle.isBoolean() && shuffleOn != _playerState.shuffle)
+				{
+					_playerState.shuffle = shuffleOn;
+					UpdateShuffleIcon();
+				}
+
+				string repeat = JsonStr(root("repeat_state"));
+				for (short mode = 0; mode < kRepeatModeCount; mode++)
+				{
+					if (repeat == kRepeatModes[mode].state && mode != _playerState.repeat)
+					{
+						_playerState.repeat = mode;
+						UpdateRepeatIcon();
+					}
+				}
+			}
+
 			JsonValue device = root("device");
 			bool unlisted = false;
+			bool onOurDevice = false;
 			if (device.getTag() == JSON_OBJECT)
 			{
 				// Follow the device that plays, also when it was started or
@@ -1297,6 +1404,7 @@ void RefreshPlayerState()
 					MarkDevice();
 					unlisted = !DeviceListed(id);
 				}
+				onOurDevice = !id.empty() && id == _spotifyClient.DeviceId;
 
 				JsonValue volumePercent = device("volume_percent");
 
@@ -1347,34 +1455,57 @@ void RefreshPlayerState()
 				}
 			}
 
+			// Where the track is, for Back. Only when it is on MacPlayer's
+			// device: just after a Device menu pick it is still the old one's.
+			JsonValue progress = root("progress_ms");
+			_playerState.progressMs =
+				onOurDevice && progress.getTag() == JSON_NUMBER ? progress.toInt() : 0;
+
 			// Not in the Device menu (switched on after the list was read):
 			// read the list again. Last, as root's strings live in the
 			// response buffer the next request reuses.
 			if (unlisted)
 				GetDevices();
 		});
+	return answered;
+}
+
+// Show cicn iconId in a dialog item and free the icon it replaces. That one
+// is a cicn too: the Dialog Manager loads an icon item's cicn with GetCIcon,
+// and once replaced nothing else refers to it.
+static void SetItemIcon(short item, short iconId)
+{
+	CIconHandle icon = GetCIcon(iconId);
+	if (icon == nil)
+		return;  // out of memory: keep the one shown
+
+	DialogItemType itemType;
+	Handle old;
+	Rect itemRect;
+	GetDialogItem(_dialog, item, &itemType, &old, &itemRect);
+	SetDialogItem(_dialog, item, itemType, (Handle)icon, &itemRect);
+	if (old != nil)
+		DisposeCIcon((CIconHandle)old);
+
+	// Draw just this item; its mask covers the whole rect
+	MacSetPort(_dialog);
+	PlotCIcon(&itemRect, icon);
 }
 
 void TogglePlayButtonIcon()
 {
-	DialogItemType itemType;
-	Handle tempHandle;
-	Rect itemRect;
+	SetItemIcon(kPlayerPlayButton, _playerState.isPlaying ? kPlayerPauseIcon : kPlayerPlayIcon);
+}
 
-	int iconId = _playerState.isPlaying ? kPlayerPauseIcon : kPlayerPlayIcon;
-	CIconHandle icon = GetCIcon(iconId);
+// On: a dot underneath, as in Spotify's own apps
+void UpdateShuffleIcon()
+{
+	SetItemIcon(kPlayerShuffle, _playerState.shuffle ? kPlayerShuffleOnIcon : kPlayerShuffleIcon);
+}
 
-	GetDialogItem(_dialog, kPlayerPlayButton, &itemType, &tempHandle, &itemRect);
-	SetDialogItem(_dialog, kPlayerPlayButton, itemType, (Handle)icon, &itemRect);
-
-	// Free the icon this function put there last time. The one the Dialog
-	// Manager loaded with the item is left alone, it owns that one.
-	if (_playIcon != nil && (Handle)_playIcon == tempHandle)
-		DisposeCIcon(_playIcon);
-	_playIcon = icon;
-
-	InvalRect(&itemRect);
-	UpdateDialog(_dialog, _dialog->visRgn);
+void UpdateRepeatIcon()
+{
+	SetItemIcon(kPlayerRepeat, kRepeatModes[_playerState.repeat].iconId);
 }
 
 void HandleUpdate(EventRecord *eventPtr)

@@ -605,6 +605,108 @@ data 'cicn' (136, "pause", purgeable) {
 	$"FE7F FF8F F1FF FFF0 0FFF"                           /* ...�...... */
 };
 
+data 'cicn' (137, "shuffle on", purgeable) {
+	$"0000 0000 8004 0000 0000 0020 0020 0000"            /* ........... . .. */
+	$"0000 0000 0000 0048 0000 0048 0000 0000"            /* .......H...H.... */
+	$"0001 0001 0001 0000 0000 0000 0000 0000"            /* ................ */
+	$"0000 0000 0000 0004 0000 0000 0020 0020"            /* ............. .  */
+	$"0000 0000 0004 0000 0000 0020 0020 0000"            /* ........... . .. */
+	$"0000 FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FF3F FFFF FF3F FFFF FF0F FFFF"            /* .....?...?...... */
+	$"FF0F C00F F003 C00F F003 FFC3 C30F FFC3"            /* ................ */
+	$"C30F FFFF 0F3F FFFF 0F3F FFFC 3FFF FFFC"            /* .....?...?..?... */
+	$"3FFF FFFC 3FFF FFFC 3FFF FFF0 FF3F FFF0"            /* ?...?...?....?.. */
+	$"FF3F FFC3 C30F FFC3 C30F C00F F003 C00F"            /* .?.............. */
+	$"F003 FFFF FF0F FFFF FF0F FFFF FF3F FFFF"            /* .............?.. */
+	$"FF3F FFFC 3FFF FFFC 3FFF FFFC 3FFF FFFC"            /* .?..?...?...?... */
+	$"3FFF 0000 0000 0000 0001 0000 FFFF FFFF"            /* ?............... */
+	$"FFFF 0001 0000 0000 0000 FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FF3F FFFF"            /* .............?.. */
+	$"FF3F FFFF FF0F FFFF FF0F C00F F003 C00F"            /* .?.............. */
+	$"F003 FFC3 C30F FFC3 C30F FFFF 0F3F FFFF"            /* .............?.. */
+	$"0F3F FFFC 3FFF FFFC 3FFF FFFC 3FFF FFFC"            /* .?..?...?...?... */
+	$"3FFF FFF0 FF3F FFF0 FF3F FFC3 C30F FFC3"            /* ?....?...?...... */
+	$"C30F C00F F003 C00F F003 FFFF FF0F FFFF"            /* ................ */
+	$"FF0F FFFF FF3F FFFF FF3F FFFC 3FFF FFFC"            /* .....?...?..?... */
+	$"3FFF FFFC 3FFF FFFC 3FFF"                           /* ?...?...?. */
+};
+
+data 'cicn' (138, "repeat on", purgeable) {
+	$"0000 0000 8004 0000 0000 0020 0020 0000"            /* ........... . .. */
+	$"0000 0000 0000 0048 0000 0048 0000 0000"            /* .......H...H.... */
+	$"0001 0001 0001 0000 0000 0000 0000 0000"            /* ................ */
+	$"0000 0000 0000 0004 0000 0000 0020 0020"            /* ............. .  */
+	$"0000 0000 0004 0000 0000 0020 0020 0000"            /* ........... . .. */
+	$"0000 FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FCFF FFFF FCFF FFFF FC3F FFFF"            /* .............?.. */
+	$"FC3F FC00 000F FC00 000F F0FF FC3F F0FF"            /* .?...........?.. */
+	$"FC3F C3FF FCFF C3FF FCFF CFFF FFF3 CFFF"            /* .?.............. */
+	$"FFF3 CFFF FFF3 CFFF FFF3 FF3F FFC3 FF3F"            /* ...........?...? */
+	$"FFC3 FC3F FF0F FC3F FF0F F000 003F F000"            /* ...?...?.....?.. */
+	$"003F FC3F FFFF FC3F FFFF FF3F FFFF FF3F"            /* .?.?...?...?...? */
+	$"FFFF FFFC 3FFF FFFC 3FFF FFFC 3FFF FFFC"            /* ....?...?...?... */
+	$"3FFF 0000 0000 0000 0001 0000 FFFF FFFF"            /* ?............... */
+	$"FFFF 0001 0000 0000 0000 FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FCFF FFFF"            /* ................ */
+	$"FCFF FFFF FC3F FFFF FC3F FC00 000F FC00"            /* .....?...?...... */
+	$"000F F0FF FC3F F0FF FC3F C3FF FCFF C3FF"            /* .....?...?...... */
+	$"FCFF CFFF FFF3 CFFF FFF3 CFFF FFF3 CFFF"            /* ................ */
+	$"FFF3 FF3F FFC3 FF3F FFC3 FC3F FF0F FC3F"            /* ...?...?...?...? */
+	$"FF0F F000 003F F000 003F FC3F FFFF FC3F"            /* .....?...?.?...? */
+	$"FFFF FF3F FFFF FF3F FFFF FFFC 3FFF FFFC"            /* ...?...?....?... */
+	$"3FFF FFFC 3FFF FFFC 3FFF"                           /* ?...?...?. */
+};
+
+data 'cicn' (139, "repeat one", purgeable) {
+	$"0000 0000 8004 0000 0000 0020 0020 0000"            /* ........... . .. */
+	$"0000 0000 0000 0048 0000 0048 0000 0000"            /* .......H...H.... */
+	$"0001 0001 0001 0000 0000 0000 0000 0000"            /* ................ */
+	$"0000 0000 0000 0004 0000 0000 0020 0020"            /* ............. .  */
+	$"0000 0000 0004 0000 0000 0020 0020 0000"            /* ........... . .. */
+	$"0000 FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FCFF FFFF FCFF FFFF FC3F FFFF"            /* .............?.. */
+	$"FC3F FC00 000F FC00 000F F0FF FC3F F0FF"            /* .?...........?.. */
+	$"FC3F C3FF 3CFF C3FF 3CFF CFFC 3FF3 CFFC"            /* .?..<...<...?... */
+	$"3FF3 CFFF 3FF3 CFFF 3FF3 FF3F 3FC3 FF3F"            /* ?...?...?..??..? */
+	$"3FC3 FC3F FF0F FC3F FF0F F000 003F F000"            /* ?..?...?.....?.. */
+	$"003F FC3F FFFF FC3F FFFF FF3F FFFF FF3F"            /* .?.?...?...?...? */
+	$"FFFF FFFC 3FFF FFFC 3FFF FFFC 3FFF FFFC"            /* ....?...?...?... */
+	$"3FFF 0000 0000 0000 0001 0000 FFFF FFFF"            /* ?............... */
+	$"FFFF 0001 0000 0000 0000 FFFF FFFF FFFF"            /* ................ */
+	$"FFFF FFFF FFFF FFFF FFFF FFFF FCFF FFFF"            /* ................ */
+	$"FCFF FFFF FC3F FFFF FC3F FC00 000F FC00"            /* .....?...?...... */
+	$"000F F0FF FC3F F0FF FC3F C3FF 3CFF C3FF"            /* .....?...?..<... */
+	$"3CFF CFFC 3FF3 CFFC 3FF3 CFFF 3FF3 CFFF"            /* <...?...?...?... */
+	$"3FF3 FF3F 3FC3 FF3F 3FC3 FC3F FF0F FC3F"            /* ?..??..??..?...? */
+	$"FF0F F000 003F F000 003F FC3F FFFF FC3F"            /* .....?...?.?...? */
+	$"FFFF FF3F FFFF FF3F FFFF FFFC 3FFF FFFC"            /* ...?...?....?... */
+	$"3FFF FFFC 3FFF FFFC 3FFF"                           /* ?...?...?. */
+};
+
 data 'PICT' (132, "macplayer-black", purgeable) {
 	$"0B1D 0000 0000 0079 0145 1101 A101 F200"            /* .......y.E..�... */
 	$"1638 4249 4D00 0000 0000 0000 7901 4547"            /* .8BIM.......y.EG */

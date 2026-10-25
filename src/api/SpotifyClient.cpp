@@ -341,6 +341,34 @@ void SpotifyClient::SetVolume(int volumePercent, function<void(JsonValue&)> onCo
 		onComplete);
 }
 
+void SpotifyClient::Seek(int positionMs, function<void(JsonValue&)> onComplete)
+{
+	Put(
+		PlayerUrl("seek", "position_ms=" + to_string(positionMs)),
+		false,
+		"",
+		onComplete);
+}
+
+void SpotifyClient::SetShuffle(bool shuffle, function<void(JsonValue&)> onComplete)
+{
+	Put(
+		PlayerUrl("shuffle", string("state=") + (shuffle ? "true" : "false")),
+		false,
+		"",
+		onComplete);
+}
+
+// state: "off", "context" (repeat the playlist or album) or "track"
+void SpotifyClient::SetRepeat(const string& state, function<void(JsonValue&)> onComplete)
+{
+	Put(
+		PlayerUrl("repeat", "state=" + state),
+		false,
+		"",
+		onComplete);
+}
+
 void SpotifyClient::Get(string uri, bool debug, function<void(JsonValue&)> onComplete)
 {
 	Request(uri, "", debug, onComplete, bind(&SpotifyClient::DoGet, this, _1), true, nullptr);
