@@ -2,7 +2,9 @@
 
 **A Spotify Connect remote for 68k Macs, working again and doing its own HTTPS.**
 
-MacPlayer is [Anthony Super](https://github.com/antscode)'s app from 2018: a classic Mac that shows what Spotify is playing and controls it. [Hackaday wrote about it](https://hackaday.com/2018/12/21/giving-an-old-mac-spotify/), I thought it was totally rad, and it's the reason [Notion Classic](https://github.com/SLKK-design/NotionClassic) exists.
+MacPlayer is [Anthony Super](https://github.com/antscode)'s app from 2018: a classic Mac that shows what Spotify is playing and controls it. [Hackaday wrote about it](https://hackaday.com/2018/12/21/giving-an-old-mac-spotify/), I thought it was super cool, and it's the reason [Notion Classic](https://github.com/SLKK-design/NotionClassic) exists.
+
+![MacPlayer showing the playlists and the album cover](docs/img/Macplayer.png)
 
 Back then an SE/30 couldn't do the encryption itself. Anthony's own README for his mbedTLS port put a handshake on a 16 MHz 68030 at about 70 seconds, long after the server gives up. So MacPlayer sent plain HTTP to an OpenWRT router running stunnel, and the router did the HTTPS. Logging in and converting album covers went through his web service at 68k.io.
 
@@ -22,6 +24,9 @@ MacPlayer is a remote. The music plays on another Spotify device, such as your p
 
 Spotify only allows playback control for Premium accounts.
 
+> [!WARNING]
+> The connection is encrypted, but the Mac isn't: any app on it can read the prefs file with your Spotify login. You can remove MacPlayer's access in your Spotify account at any time.
+
 ## What changed since 2018
 
 | | 2018 | Now |
@@ -33,23 +38,28 @@ Spotify only allows playback control for Premium accounts.
 
 ## How the Mac does HTTPS
 
-The engine is antscode's 68k port of mbedTLS, with the slow parts swapped for code tuned to the 68030: an X25519 key exchange on custom 68020 assembly, with the key pair made before it's needed. Spotify's servers use RSA certificates, not the ECDSA ones Notion's Cloudflare uses, so mbedTLS checks those signatures with its own RSA code.
+The engine runs mbedTLS 3.2.1, the same build as Claude 68, with the slow parts swapped for code tuned to the 68030: an X25519 key exchange on custom 68020 assembly, with the key pair made before it's needed. Spotify's servers use RSA certificates, not the ECDSA ones Notion's Cloudflare uses, so mbedTLS checks those signatures with its own RSA code.
 
 After the first connection, MacPlayer keeps session tickets for `api.spotify.com` and Spotify's image server on disk. The next connection resumes the saved session and skips the key exchange.
 
 ## Requirements
 
-| | |
-|---|---|
-| CPU | 68020 or later. Tested on an SE/30 and in Basilisk II. |
-| OS | System 7 with MacTCP or Open Transport |
-| Memory | 3 MB for MacPlayer |
-| Spotify | A Premium account, and a free Spotify developer app (step 1 below) |
-| Once | A modern computer with Python 3, to log in |
+```text
+A Macintosh with at least:
+
+CPU            68020
+App partition  2.4 MB
+System RAM     8 MB
+OS             System 7.5
+Network        Ethernet card, DaynaPORT, PiSCSI or BlueSCSI
+Spotify        A Premium account, and a free Spotify developer app
+               (step 1 below)
+Once           A modern computer with Python 3, to log in
+```
 
 ## Download
 
-Get [MacPlayer.sit](https://github.com/SLKK-design/MacPlayer/releases/latest/download/MacPlayer.sit) (StuffIt, for the Mac itself) or [MacPlayer.zip](https://github.com/SLKK-design/MacPlayer/releases/latest/download/MacPlayer.zip) (for a modern Mac, which keeps the resource fork when it unzips) from the [latest release](https://github.com/SLKK-design/MacPlayer/releases/latest), and copy the app to the Mac. Then log in once, as below.
+<a href="https://github.com/SLKK-design/MacPlayer/releases/latest/download/MacPlayer.sit"><img src="docs/img/MacPlay-icon.png" width="32" align="left" alt="MacPlayer.sit"></a>Get [MacPlayer.sit](https://github.com/SLKK-design/MacPlayer/releases/latest/download/MacPlayer.sit) (StuffIt, for the Mac itself) or [MacPlayer.zip](https://github.com/SLKK-design/MacPlayer/releases/latest/download/MacPlayer.zip).
 
 ## Logging in
 
@@ -70,16 +80,14 @@ MacPlayer keeps three things in System Folder:Preferences:
 - **MacPlayer TLS Cache:** the DNS answer, session tickets, other handshake shortcuts and a random seed for the next launch. Safe to delete; it rebuilds itself.
 - **MacPlayer Cache:** album covers it has already shown.
 
-## A word on security
-
-The connection is encrypted. The Mac is not protected. Classic Mac OS has no memory protection and no file permissions, so anything running on the Mac can read the preferences file. MacPlayer only asks Spotify for what a remote needs: reading and controlling playback, reading and changing your Liked Songs, and your playlists. Use your own Spotify app, and you can remove MacPlayer's access from your Spotify account at any time.
-
 ## Building
 
 You only need [Retro68](https://github.com/autc04/Retro68). The 68k mbedTLS and MacTCPHelper libraries come pre-built in `src/core/lib`.
 
-    cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=<Retro68-build>/toolchain/m68k-apple-macos/cmake/retro68.toolchain.cmake
-    make -C build
+```bash
+cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=<Retro68-build>/toolchain/m68k-apple-macos/cmake/retro68.toolchain.cmake
+make -C build
+```
 
 This produces `build/MacPlayer.APPL`, `MacPlayer.bin` and `MacPlayer.dsk`. Copy the app to the Mac with its resource fork intact (the `.bin` or the `.dsk` image do that).
 
@@ -96,6 +104,12 @@ tools/
 ```
 
 `src/core` is a copy of Claude 68's engine. `net/HttpClient`, `net/Uri`, `net/RootCert` and `helpers/tls_cache.h` are adapted for Spotify (several hosts, form POSTs, Spotify's certificates, a second saved session), with the changes marked `MacPlayer:`. The rest is unchanged.
+
+## Sibling projects
+
+<a href="https://github.com/SLKK-design/NotionClassic"><img src="docs/img/Notion-icon.png" width="32" align="absmiddle" alt="Notion Classic"></a>&nbsp; **[Notion Classic](https://github.com/SLKK-design/NotionClassic)**: reads and edits Notion pages.<br>
+<a href="https://github.com/SLKK-design/Claude68"><img src="docs/img/Claude-icon.png" width="32" align="absmiddle" alt="Claude 68"></a>&nbsp; **[Claude 68](https://github.com/SLKK-design/Claude68)**: a Claude chat client, and the starting point for your own 68k HTTPS app.<br>
+<a href="https://github.com/SLKK-design/HTTPS-68K-Speedtest"><img src="docs/img/Speedtest-icon.png" width="32" align="absmiddle" alt="Speed Test"></a>&nbsp; **[Speed Test](https://github.com/SLKK-design/HTTPS-68K-Speedtest)**: times every handshake method on your Mac.
 
 ## Credits
 
@@ -114,7 +128,7 @@ Bundled libraries, each under its own license:
 
 - [mbedTLS](https://github.com/Mbed-TLS/mbedtls) (ARM/Mbed, Apache 2.0)
 - [micro-ecc](https://github.com/kmackay/micro-ecc) (Kenneth MacKay, BSD 2-clause)
-- [curve25519-donna](https://github.com/agl/curve25519-donna) (Adam Langley / Google, BSD 3-clause), the base of the X25519 code
+- [curve25519-donna](https://github.com/agl/curve25519-donna) (Adam Langley / Google, BSD 3-clause), where the X25519 code started
 - [stb_image](https://github.com/nothings/stb) (Sean Barrett, public domain or MIT), for the album covers
 - [http-parser](https://github.com/nodejs/http-parser) (Joyent / Node.js contributors, MIT), [yuarel](https://github.com/jackenl/yuarel) (Jack Engqvist Johansson, MIT), [gason](https://github.com/vivkin/gason) (Ivan Vashchaev, MIT)
 - [spotify-matrix](https://github.com/tnarla/spotify-matrix) by tnarla, for the login approach
